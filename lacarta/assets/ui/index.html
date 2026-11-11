@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lacarta console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/purify.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --canvas: #e9eef0; --surface: #f9fbfb; --surface-raised: #ffffff; --surface-sunken: #dfe7e8;
+  --overlay-hover: rgba(14, 26, 28, 0.06); --overlay-active: rgba(14, 26, 28, 0.11);
+  --glass-surface: rgba(249, 251, 251, 0.76); --glass-border: rgba(255, 255, 255, 0.60);
+  --glass-tint: rgba(107, 43, 181, 0.10);
+  --border-subtle: #d3dedf; --border: #bdcbcd; --border-strong: #64777a;
+  --text: #0e1a1c; --text-secondary: #3b4c50; --text-muted: #546a6d;
+  --brand: #6b2bb5; --brand-strong: #55208f; --brand-subtle: #ece1fa; --brand-border: #7b4abd; --on-brand: #ffffff;
+  --accent: #9a4e00; --accent-subtle: #fbeada; --accent-border: #8f5c12;
+  --success: #146b48; --success-subtle: #ddf0e6; --success-border: #2b8158;
+  --danger: #ae261c; --danger-subtle: #fbe5e2; --danger-border: #b8483c; --on-danger: #ffffff;
+  --warning: #7d4c00; --warning-subtle: #fbecd3; --warning-border: #8a6213;
+  --info: #155a99; --info-subtle: #e0edf9; --info-border: #2c6ca5;
+  --focus-ring: #0a5f9e;
+  --shadow-xs: 0 1px 2px rgba(9, 18, 20, 0.08); --shadow-sm: 0 2px 6px rgba(9, 18, 20, 0.10);
+  --shadow-glass: 0 10px 32px rgba(9, 18, 20, 0.16); --shadow-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --sans: Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-xs: 4px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px; --radius-pill: 999px;
+  --sidebar-width: 264px; --appbar-height: 56px; --content-max: 1200px; --readable-max: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #0b1214; --surface: #131c1f; --surface-raised: #1b262a; --surface-sunken: #080e0f;
+    --overlay-hover: rgba(233, 241, 242, 0.08); --overlay-active: rgba(233, 241, 242, 0.14);
+    --glass-surface: rgba(19, 28, 31, 0.78); --glass-border: rgba(233, 241, 242, 0.13);
+    --glass-tint: rgba(185, 140, 245, 0.12);
+    --border-subtle: #222e31; --border: #2f3e42; --border-strong: #85989c;
+    --text: #e9f1f2; --text-secondary: #b3c4c6; --text-muted: #8da1a4;
+    --brand: #b98cf5; --brand-strong: #cfb0fa; --brand-subtle: #221439; --brand-border: #8f6cc9; --on-brand: #1b0836;
+    --accent: #f0a63a; --accent-subtle: #33230b; --accent-border: #b07f32;
+    --success: #35c286; --success-subtle: #08281c; --success-border: #3f9670;
+    --danger: #ff8271; --danger-subtle: #331009; --danger-border: #b35546; --on-danger: #330c06;
+    --warning: #e9ad2a; --warning-subtle: #2d2105; --warning-border: #a67c26;
+    --info: #6bb2f0; --info-subtle: #0a2135; --info-border: #3f7cb3;
+    --focus-ring: #7cc0f7;
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.55); --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.55);
+    --shadow-glass: 0 10px 32px rgba(0, 0, 0, 0.60); --shadow-glass-inset: inset 0 1px 0 rgba(233, 241, 242, 0.07);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0b1214; --surface: #131c1f; --surface-raised: #1b262a; --surface-sunken: #080e0f;
+  --overlay-hover: rgba(233, 241, 242, 0.08); --overlay-active: rgba(233, 241, 242, 0.14);
+  --glass-surface: rgba(19, 28, 31, 0.78); --glass-border: rgba(233, 241, 242, 0.13);
+  --glass-tint: rgba(185, 140, 245, 0.12);
+  --border-subtle: #222e31; --border: #2f3e42; --border-strong: #85989c;
+  --text: #e9f1f2; --text-secondary: #b3c4c6; --text-muted: #8da1a4;
+  --brand: #b98cf5; --brand-strong: #cfb0fa; --brand-subtle: #221439; --brand-border: #8f6cc9; --on-brand: #1b0836;
+  --accent: #f0a63a; --accent-subtle: #33230b; --accent-border: #b07f32;
+  --success: #35c286; --success-subtle: #08281c; --success-border: #3f9670;
+  --danger: #ff8271; --danger-subtle: #331009; --danger-border: #b35546; --on-danger: #330c06;
+  --warning: #e9ad2a; --warning-subtle: #2d2105; --warning-border: #a67c26;
+  --info: #6bb2f0; --info-subtle: #0a2135; --info-border: #3f7cb3;
+  --focus-ring: #7cc0f7;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.55); --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.55);
+  --shadow-glass: 0 10px 32px rgba(0, 0, 0, 0.60); --shadow-glass-inset: inset 0 1px 0 rgba(233, 241, 242, 0.07);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--canvas); color: var(--text);
+  font: 400 15px/22px var(--sans); -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: var(--mono); font-size: 13px; line-height: 20px; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+a { color: var(--brand); }
+
+/* App bar: the one glass pane. */
+.appbar {
+  position: sticky; top: 0; z-index: 200; height: var(--appbar-height);
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: linear-gradient(var(--glass-tint), var(--glass-tint)), var(--glass-surface);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass), var(--shadow-glass-inset);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .appbar { background: var(--surface-raised); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .appbar { background: var(--surface-raised); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+.appbar .name { font-weight: 800; font-size: 16px; letter-spacing: -0.008em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appbar .name b { color: var(--brand); }
+.appbar .spacer { flex: 1; }
+.live { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
+.live.off { color: var(--danger); }
+
+.layout { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: calc(100vh - var(--appbar-height)); }
+nav.side { border-right: 1px solid var(--border-subtle); background: var(--surface); padding: 16px 12px; }
+nav.side a {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 36px; padding: 0 12px; margin-bottom: 2px; border-radius: var(--radius-md);
+  color: var(--text-secondary); text-decoration: none; font-weight: 600;
+  transition: background-color 120ms ease-out;
+}
+nav.side a:hover { background: var(--overlay-hover); }
+nav.side a:active { background: var(--overlay-active); }
+nav.side a[aria-current="page"] { background: var(--brand-subtle); color: var(--brand-strong); }
+nav.side .count { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
+nav.side a[aria-current="page"] .count { color: var(--brand-strong); }
+nav.side .count.hot { color: var(--danger); font-weight: 700; }
+
+main { padding: 24px; min-width: 0; }
+.content { max-width: var(--content-max); margin: 0 auto; }
+h1 { font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.012em; margin: 0 0 4px; }
+h2 { font-size: 20px; line-height: 26px; font-weight: 700; letter-spacing: -0.008em; margin: 32px 0 12px; }
+h3 { font-size: 16px; line-height: 22px; font-weight: 700; margin: 0; }
+.lede { color: var(--text-secondary); margin: 0 0 24px; }
+.overline { font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+.muted { color: var(--text-muted); }
+.small { font-size: 13px; line-height: 19px; }
+
+.card { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 16px; }
+.stack > * + * { margin-top: 12px; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px;
+  border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface-sunken);
+  color: var(--text-secondary); font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap;
+}
+.badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.badge.plain::before { display: none; }
+.badge.success { background: var(--success-subtle); border-color: var(--success-border); color: var(--success); }
+.badge.danger { background: var(--danger-subtle); border-color: var(--danger-border); color: var(--danger); }
+.badge.warning { background: var(--warning-subtle); border-color: var(--warning-border); color: var(--warning); }
+.badge.info { background: var(--info-subtle); border-color: var(--info-border); color: var(--info); }
+.badge.brand { background: var(--brand-subtle); border-color: var(--brand-border); color: var(--brand); }
+.badge.accent { background: var(--accent-subtle); border-color: var(--accent-border); color: var(--accent); }
+.badge.critical { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
+
+.banner { display: flex; gap: 12px; align-items: flex-start; border-radius: var(--radius-lg); padding: 16px; border: 1px solid; margin-bottom: 24px; }
+.banner.danger { background: var(--danger-subtle); border-color: var(--danger-border); }
+.banner.danger strong { color: var(--danger); }
+.banner.info { background: var(--info-subtle); border-color: var(--info-border); }
+.banner svg { flex: none; margin-top: 1px; }
+
+.stat .value { font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.012em; }
+.stat .value small { font-size: 15px; font-weight: 600; color: var(--text-muted); }
+.sev-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.step { border: 1px solid var(--border-subtle); background: var(--surface); border-radius: var(--radius-md); padding: 12px; }
+.step .label { font-weight: 700; }
+.step.current { border-color: var(--brand-border); background: var(--brand-subtle); }
+.step.current .state { color: var(--brand-strong); }
+.step.done .state { color: var(--success); }
+.step .state { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-muted); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 36px; padding: 0 14px; border-radius: var(--radius-md); border: 1px solid var(--border);
+  background: var(--surface-raised); color: var(--text); font: 600 15px/22px var(--sans);
+  box-shadow: var(--shadow-xs); cursor: pointer; transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+.btn:hover { background-image: linear-gradient(var(--overlay-hover), var(--overlay-hover)); }
+.btn:active { background-image: linear-gradient(var(--overlay-active), var(--overlay-active)); }
+.btn.primary { background-color: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.btn.sm { height: 28px; padding: 0 10px; font-size: 13px; }
+@media (pointer: coarse) { .btn { height: 44px; } }
+.choice[aria-pressed="true"] { background: var(--brand-subtle); border-color: var(--brand-border); color: var(--brand-strong); box-shadow: inset 0 0 0 1px var(--brand-border); }
+
+textarea {
+  width: 100%; min-height: 76px; resize: vertical; padding: 8px 12px;
+  border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface-raised);
+  color: var(--text); font: 400 15px/22px var(--sans);
+}
+textarea::placeholder { color: var(--text-muted); }
+/* Agent avatars: initials on a tinted disc until profile pictures become customizable. */
+.avatar {
+  flex: none; display: inline-grid; place-items: center; overflow: hidden;
+  width: 22px; height: 22px; border-radius: var(--radius-pill); border: 1px solid;
+  font-size: 11px; line-height: 1; font-weight: 700; letter-spacing: 0.02em; user-select: none;
+}
+.avatar.md { width: 40px; height: 40px; font-size: 15px; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.avatar.t-brand { background: var(--brand-subtle); color: var(--brand); border-color: var(--brand-border); }
+.avatar.t-info { background: var(--info-subtle); color: var(--info); border-color: var(--info-border); }
+.avatar.t-success { background: var(--success-subtle); color: var(--success); border-color: var(--success-border); }
+.avatar.t-accent { background: var(--accent-subtle); color: var(--accent); border-color: var(--accent-border); }
+.avatar.t-warning { background: var(--warning-subtle); color: var(--warning); border-color: var(--warning-border); }
+.agent-chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+.agent-chip .role { font-weight: 400; color: var(--text-muted); font-size: 13px; }
+.agents { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.agent-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.agent-card .name { font-size: 16px; line-height: 22px; font-weight: 700; }
+.agent-card .task { margin-top: 6px; overflow-wrap: anywhere; }
+.agent-card.finished { box-shadow: none; background: var(--surface-sunken); }
+.asker { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.asker .who { font-weight: 700; }
+.model-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 16px; align-items: center; }
+select {
+  height: 36px; padding: 0 32px 0 12px; border-radius: var(--radius-md); border: 1px solid var(--border);
+  background: var(--surface-raised); color: var(--text); font: 600 15px/22px var(--sans); width: 100%;
+  appearance: none; cursor: pointer; box-shadow: var(--shadow-xs);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%), linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 16px, calc(100% - 12px) 16px; background-size: 5px 5px; background-repeat: no-repeat;
+}
+select:hover { border-color: var(--border-strong); }
+@media (pointer: coarse) { select { height: 44px; } }
+@media (max-width: 600px) { .model-row { grid-template-columns: 1fr; gap: 8px; } }
+label.field { display: block; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+
+.q { padding: 0; overflow: hidden; }
+.q header { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.q.blocking header { background: var(--danger-subtle); border-bottom-color: var(--danger-border); }
+.q .body { padding: 16px; }
+.q footer { padding: 12px 16px; border-top: 1px solid var(--border-subtle); background: var(--surface-sunken); display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.err { color: var(--danger); font-size: 13px; line-height: 19px; font-weight: 600; }
+
+.md { max-width: var(--readable-max); overflow-wrap: anywhere; }
+.md.wide { max-width: none; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md h1 { font-size: 28px; line-height: 34px; margin: 0 0 16px; }
+.md h2 { margin: 28px 0 8px; }
+.md h3 { margin: 20px 0 6px; }
+.md p, .md ul, .md ol { margin: 0 0 12px; }
+.md li + li { margin-top: 2px; }
+.md code { background: var(--surface-sunken); border-radius: var(--radius-xs); padding: 1px 4px; }
+.md pre { background: var(--surface-sunken); border-radius: var(--radius-lg); padding: 12px 16px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; margin: 0 0 16px; max-width: 100%; }
+.md th, .md td { border: 1px solid var(--border-subtle); padding: 6px 10px; text-align: left; vertical-align: top; font-size: 13px; line-height: 19px; }
+.md th { background: var(--surface-sunken); color: var(--text-secondary); font-weight: 600; }
+.md blockquote { margin: 0 0 12px; padding-left: 12px; border-left: 2px solid var(--border); color: var(--text-secondary); }
+
+.tabs { display: inline-flex; gap: 4px; padding: 4px; background: var(--surface-sunken); border-radius: var(--radius-pill); flex-wrap: wrap; margin-bottom: 16px; }
+.tabs button {
+  border: 0; background: transparent; color: var(--text-secondary); font: 600 13px/19px var(--sans);
+  height: 32px; padding: 0 12px; border-radius: var(--radius-pill); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.tabs button:hover { background: var(--overlay-hover); }
+.tabs button[aria-selected="true"] { background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-xs); }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--text-muted); }
+.dot.success { background: var(--success); } .dot.info { background: var(--info); } .dot.danger { background: var(--danger); } .dot.warning { background: var(--warning); }
+
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+table.data { border-collapse: collapse; width: 100%; }
+table.data th { background: var(--surface-sunken); color: var(--text-secondary); font-size: 13px; line-height: 19px; font-weight: 600; text-align: left; padding: 8px 12px; white-space: nowrap; }
+table.data td { padding: 8px 12px; border-top: 1px solid var(--border-subtle); vertical-align: top; }
+table.data td.id { font-family: var(--mono); font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+
+.list > div { padding: 10px 0; border-top: 1px solid var(--border-subtle); }
+.list > div:first-child { border-top: 0; padding-top: 0; }
+details > summary { cursor: pointer; font-weight: 600; color: var(--brand); list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸ "; }
+details[open] > summary::before { content: "▾ "; }
+details .md { margin-top: 12px; padding: 12px 16px; background: var(--surface-sunken); border-radius: var(--radius-lg); }
+.empty { padding: 32px 16px; text-align: center; color: var(--text-secondary); }
+.chip { font-family: var(--mono); font-size: 12px; line-height: 16px; padding: 1px 6px; border-radius: var(--radius-xs); background: var(--surface-sunken); color: var(--text-secondary); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  nav.side { position: sticky; top: var(--appbar-height); z-index: 100; display: flex; overflow-x: auto; gap: 4px; padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+  nav.side a { flex: none; margin: 0; min-height: 44px; }
+  main { padding: 16px; }
+  .split { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .live .long { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <span class="name" id="project">Lacarta</span>
+  <span id="stage-badge"></span>
+  <span class="spacer"></span>
+  <span class="live" id="live" role="status">Connecting…</span>
+  <button class="btn sm" id="theme" type="button" aria-label="Switch theme">Theme</button>
+</header>
+<div class="layout">
+  <nav class="side" id="nav" aria-label="Sections"></nav>
+  <main><div class="content" id="view"><p class="muted">Loading project state…</p></div></main>
+</div>
+<script>
+"use strict";
+const TOKEN = "__LACARTA_TOKEN__";
+const SPEC_ORDER = ["functional", "architecture", "stack", "security"];
+const STAGES = [["specification", "Specification"], ["implementation", "Implementation"], ["final-review", "Final review"], ["done", "Done"]];
+const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
+const UNRESOLVED = new Set(["open", "fixing", "redesign"]);
+let data = null, lastJson = "", pendingRender = false;
+const drafts = {}, errors = {};
+let specTab = "functional", findingFilter = "unresolved";
+let modelDraft = {}, modelError = "";
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const md = s => {
+  const text = String(s ?? "");
+  if (!window.marked || !window.DOMPurify) return `<p style="white-space:pre-wrap">${esc(text)}</p>`;
+  return DOMPurify.sanitize(marked.parse(text));
+};
+const mdInline = s => window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parseInline(String(s ?? ""))) : esc(s);
+const label = s => String(s).replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
+
+function ago(iso) {
+  if (!iso) return "";
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  const t = s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)} min ago` : s < 86400 ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / 86400)} d ago`;
+  return `<span title="${esc(iso)}">${t}</span>`;
+}
+
+const TONE = {
+  approved: "success", done: "success", pass: "success", fixed: "success", answered: "success",
+  "in-review": "info", "in-progress": "info", "awaiting-approval": "brand", open: "warning",
+  "changes-requested": "danger", fail: "danger", fixing: "warning", redesign: "warning",
+  accepted: "accent", "wont-fix": "", draft: "", planned: "", stopped: "danger", changed: "warning",
+  passed: "success", failed: "danger", stale: "warning", none: "",
+  specification: "info", implementation: "brand", "final-review": "accent",
+};
+const badge = (s, text) => `<span class="badge ${TONE[s] ?? ""}">${esc(text ?? label(s))}</span>`;
+const sevBadge = s => `<span class="badge ${s === "critical" ? "critical" : s === "high" ? "danger" : s === "medium" ? "warning" : s === "low" ? "info" : ""}">${label(s)}</span>`;
+const AVATAR_TONES = ["brand", "info", "success", "accent", "warning"];
+const agentById = id => (data.state.agents || []).find(a => a.id === id);
+const initials = name => String(name || "?").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+function avatar(a, size = "") {
+  if (!a) return "";
+  const n = [...a.id].reduce((h, c) => h * 31 + c.charCodeAt(0), 7);
+  const tone = AVATAR_TONES[Math.abs(n) % AVATAR_TONES.length];
+  // `avatar` is reserved for custom pictures; only inline images are rendered, never remote URLs.
+  const pic = typeof a.avatar === "string" && /^data:image\/(png|jpeg|gif|webp);base64,/.test(a.avatar)
+    ? `<img src="${esc(a.avatar)}" alt="">` : esc(initials(a.name));
+  return `<span class="avatar ${size} t-${tone}" role="img" aria-label="${esc(a.name)}" title="${esc(a.name)}">${pic}</span>`;
+}
+const roleLabel = a => (data.catalog && data.catalog.roles[a.role] || {}).label || label(a.role);
+const agentChip = (id, withRole = true) => {
+  const a = agentById(id);
+  return a ? `<span class="agent-chip">${avatar(a)}${esc(a.name)}${withRole ? ` <span class="role">${esc(roleLabel(a))}</span>` : ""}</span>` : "";
+};
+const AGENT_STATUS = {
+  working: ["in-progress", "Working"], waiting: ["awaiting-approval", "Waiting for you"], blocked: ["fail", "Blocked"],
+  idle: ["draft", "Idle"], done: ["done", "Done"], failed: ["fail", "Failed"],
+};
+const agentBadge = s => badge(...(AGENT_STATUS[s] || ["draft", label(s)]));
+const byBadge = (by, agent) => by === "agent"
+  ? (agent && agentById(agent) ? agentChip(agent, false) : badge("draft", "Agent"))
+  : badge("approved", by === "user" ? "You" : "You (terminal)");
+const phaseName = p => p === "final" ? "Final review" : p === "spec" ? "Specification" : p == null ? "" : `Phase ${p}`;
+const SPEC_REVIEW_TEXT = {
+  none: ["Not run yet", "Once all four specs and the plan are written, a fresh agent with no memory reviews them for gaps and incoherences. Approvals open after it passes."],
+  failed: ["Failed", "The last independent review found problems. The agent fixes them, then a new reviewer checks again."],
+  stale: ["Out of date", "The specs or the plan changed after the last review passed. A new independent review is needed before approval."],
+  passed: ["Passed on the current text", "An independent agent found the specification complete and coherent. Any further edit requires a new review."],
+};
+const SPEC_STEP_WORD = { none: "Writing", failed: "Fixing review findings", stale: "Needs a new review", passed: "Awaiting your approval" };
+
+const ICON_ALERT = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--danger)"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
+const ICON_INFO = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--info)"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`;
+
+const ROUTES = {
+  overview: ["Overview", viewOverview],
+  questions: ["Questions", viewQuestions],
+  specs: ["Specifications", viewSpecs],
+  phases: ["Phases & reviews", viewPhases],
+  findings: ["Findings", viewFindings],
+  decisions: ["Decisions", viewDecisions],
+  models: ["Models", viewModels],
+  activity: ["Activity", viewActivity],
+};
+const route = () => (location.hash.slice(1) in ROUTES ? location.hash.slice(1) : "overview");
+
+function renderNav() {
+  const st = data.state, d = data.derived;
+  const unresolved = st.findings.filter(f => UNRESOLVED.has(f.status)).length;
+  const counts = {
+    questions: [d.open_questions, d.open_questions > 0],
+    specs: [`${d.specs_approved}/4`, false],
+    phases: [`${d.phases_done}/${st.phases.length}`, false],
+    findings: [unresolved, d.open_findings.critical + d.open_findings.high > 0],
+    decisions: [st.decisions.length, false],
+    models: st.models.confirmed ? null : ["To confirm", true],
+  };
+  const r = route();
+  document.getElementById("nav").innerHTML = Object.entries(ROUTES).map(([k, [name]]) => {
+    const c = counts[k];
+    return `<a href="#${k}" ${k === r ? 'aria-current="page"' : ""}><span>${name}</span>${c ? `<span class="count ${c[1] ? "hot" : ""}">${esc(c[0])}</span>` : ""}</a>`;
+  }).join("");
+}
+
+function render() {
+  if (!data) return;
+  const st = data.state, d = data.derived;
+  document.title = `${st.project.name}: Lacarta console`;
+  document.getElementById("project").innerHTML = `${esc(st.project.name)}`;
+  document.getElementById("stage-badge").innerHTML = d.blocked ? badge("stopped", "Blocked") : badge(st.stage, label(st.stage));
+  renderNav();
+  document.getElementById("view").innerHTML = ROUTES[route()][1](st, d);
+  bindQuestions();
+  bindTabs();
+  bindModels();
+}
+
+function blockedBanner(d) {
+  if (!d.blocked) return "";
+  return `<div class="banner danger" role="alert">${ICON_ALERT}<div><strong>Development is stopped.</strong> ${esc(d.blocked)}<br><span class="small">Answer the decision under <a href="#questions">Questions</a> to unblock it.</span></div></div>`;
+}
+
+function viewOverview(st, d) {
+  const stageIdx = STAGES.findIndex(s => s[0] === st.stage);
+  const steps = STAGES.map(([k, name], i) => {
+    const cls = st.stage === "done" || i < stageIdx ? "done" : i === stageIdx ? "current" : "";
+    const current = d.blocked ? "Blocked" : k === "specification" ? SPEC_STEP_WORD[d.spec_review] : "Current";
+    const word = cls === "done" ? "Done" : cls === "current" ? current : "Upcoming";
+    return `<div class="step ${cls}"><div class="overline">Step ${i + 1}</div><div class="label">${name}</div><div class="state">${word}</div></div>`;
+  }).join("");
+  const sev = SEV_ORDER.filter(s => d.open_findings[s] > 0).map(s => `${sevBadge(s)}<span class="small">${d.open_findings[s]}</span>`).join(" ");
+  const totalOpen = SEV_ORDER.reduce((a, s) => a + d.open_findings[s], 0);
+  const openQs = st.questions.filter(q => q.status === "open");
+  return `
+    <h1>Overview</h1>
+    <p class="lede">${esc(st.project.summary || "Project status, open questions and everything decided so far.")}</p>
+    ${blockedBanner(d)}
+    <div class="steps" aria-label="Stages">${steps}</div>
+    <h2>Status</h2>
+    <div class="grid">
+      <a class="card stat" href="#specs" style="text-decoration:none;color:inherit"><div class="overline">Specs approved</div><div class="value">${d.specs_approved}<small> / 4</small></div></a>
+      <a class="card stat" href="#phases" style="text-decoration:none;color:inherit"><div class="overline">Phases done</div><div class="value">${d.phases_done}<small> / ${st.phases.length}</small></div><div class="small muted">Plan ${esc(label(st.plan.status).toLowerCase())}</div></a>
+      <a class="card stat" href="#questions" style="text-decoration:none;color:inherit"><div class="overline">Waiting for you</div><div class="value">${d.open_questions}<small> ${d.open_questions === 1 ? "question" : "questions"}</small></div></a>
+      <a class="card stat" href="#findings" style="text-decoration:none;color:inherit"><div class="overline">Unresolved findings</div><div class="value">${totalOpen}</div><div class="sev-row">${sev || '<span class="small muted">None open</span>'}</div></a>
+    </div>
+    <h2>Next step</h2>
+    <div class="banner info" style="margin:0">${ICON_INFO}<div>${mdInline(d.next)}</div></div>
+    ${agentsSection(st, d)}
+    ${openQs.length ? `<h2>Waiting for your answer · ${openQs.length}</h2><div class="card list">${openQs.map(q => `<div class="row">${agentChip(askerId(q), false)}<span class="chip">${esc(q.id)}</span>${kindBadge(q)}<a href="#questions">${esc(q.title)}</a><span class="small muted">${ago(q.asked_at)}</span></div>`).join("")}</div>` : ""}
+    <h2>Recent activity</h2>
+    <div class="card list">${activityRows(st.activity.slice(-8).reverse())}</div>`;
+}
+
+const askerId = q => q.asked_by || "A-1";
+
+function askerBlock(q) {
+  const a = agentById(askerId(q));
+  if (!a) return `<span class="small muted">Asked ${ago(q.asked_at)}</span>`;
+  const st = data.derived.agent_status[a.id];
+  const relay = st === "done" || st === "failed"
+    ? (() => { const o = agentById("A-1"); return `<div class="small muted">${esc(a.name)} has finished; ${esc(o ? o.name : "the orchestrator")} acts on your answer.</div>`; })()
+    : "";
+  return `<div class="asker">${avatar(a, "md")}<div><div><span class="who">${esc(a.name)}</span> <span class="small muted">asks · ${esc(roleLabel(a))} · ${ago(q.asked_at)}</span></div>${relay}</div></div>`;
+}
+
+function answeredTo(x) {
+  if (x.by === "agent" || !x.source) return "";
+  const q = data.state.questions.find(q => q.id === x.source);
+  return q ? `<span class="small muted">answering ${agentChip(askerId(q), false)}</span>` : "";
+}
+
+function agentsSection(st, d) {
+  const agents = st.agents || [];
+  if (!agents.length) return "";
+  const status = a => d.agent_status[a.id] || a.status;
+  const live = agents.filter(a => !["done", "failed"].includes(status(a)));
+  const finished = agents.filter(a => ["done", "failed"].includes(status(a))).reverse();
+  const model = a => (data.catalog.models[a.model] || {}).name || a.model;
+  const card = a => {
+    const asking = st.questions.filter(q => q.status === "open" && askerId(q) === a.id);
+    return `<article class="card agent-card ${["done", "failed"].includes(status(a)) ? "finished" : ""}">
+      ${avatar(a, "md")}
+      <div style="min-width:0">
+        <div class="row" style="justify-content:space-between"><span class="name">${esc(a.name)}</span>${agentBadge(status(a))}</div>
+        <div class="small muted">${esc(roleLabel(a))} · ${esc(model(a))}${a.phase != null ? ` · ${esc(phaseName(a.phase))}` : ""}</div>
+        <div class="task small">${esc(a.summary || a.task)}</div>
+        ${asking.length ? `<div class="small" style="margin-top:6px"><a href="#questions">${asking.length === 1 ? `Asking ${esc(asking[0].id)}: ${esc(asking[0].title)}` : `${asking.length} questions for you`}</a></div>` : ""}
+        <div class="small muted" style="margin-top:6px">${a.finished_at ? `Finished ${ago(a.finished_at)}` : `Active ${ago(a.updated_at)}`}</div>
+      </div></article>`;
+  };
+  return `<h2>Agents · ${live.length} active</h2>
+    <div class="agents">${live.map(card).join("")}</div>
+    ${finished.length ? `<details style="margin-top:12px"><summary class="small">Finished agents · ${finished.length}</summary><div class="agents" style="margin-top:12px">${finished.map(card).join("")}</div></details>` : ""}`;
+}
+
+function kindBadge(q) {
+  if ((q.effect || {}).type === "finding-triage") return badge("fail", "Security decision");
+  return q.kind === "validation" ? badge("awaiting-approval", "Validation") : q.kind === "decision" ? badge("open", "Decision") : badge("in-review", "Question");
+}
+function ctxChips(c) {
+  const out = [];
+  if (c.spec) out.push(`<span class="chip">spec: ${esc(c.spec)}</span>`);
+  if (c.phase != null) out.push(`<span class="chip">${esc(phaseName(c.phase))}</span>`);
+  if (c.finding) out.push(`<span class="chip">${esc(c.finding)}</span>`);
+  return out.join("");
+}
+
+function viewQuestions(st, d) {
+  const open = st.questions.filter(q => q.status === "open");
+  const triage = open.filter(q => (q.effect || {}).type === "finding-triage");
+  const ordered = [...triage, ...open.filter(q => !triage.includes(q))];
+  const answered = st.questions.filter(q => q.status === "answered").reverse();
+  return `
+    <h1>Questions</h1>
+    <p class="lede">The agents stop and wait here for your answers. Every answer is recorded under Decisions.</p>
+    ${blockedBanner(d)}
+    <div class="stack">${ordered.length ? ordered.map(questionCard).join("") : `<div class="card empty">No questions waiting. The agents will ask here when they need you.</div>`}</div>
+    ${answered.length ? `<h2>Answered · ${answered.length}</h2><div class="card list">${answered.map(q => `
+      <div><div class="row">${agentChip(askerId(q), false)}<span class="chip">${esc(q.id)}</span>${kindBadge(q)}<strong>${esc(q.title)}</strong></div>
+      <div class="small" style="margin-top:4px"><span class="muted">Answer:</span> ${esc(q.answer.choice || q.answer.comment)}${q.answer.choice && q.answer.comment ? ` · <span class="muted">${esc(q.answer.comment)}</span>` : ""} <span class="muted">· ${ago(q.answer.at)}</span></div></div>`).join("")}</div>` : ""}`;
+}
+
+function questionCard(q) {
+  const dr = drafts[q.id] || (drafts[q.id] = { choice: "", comment: "" });
+  const triage = (q.effect || {}).type === "finding-triage";
+  const opts = q.options.map(o => `<button type="button" class="btn choice" data-q="${esc(q.id)}" data-choice="${esc(o)}" aria-pressed="${dr.choice === o}">${esc(o)}</button>`).join("");
+  const needsComment = triage && dr.choice === "Accept the risk";
+  const hint = q.options.length === 0 ? "Your answer" : q.allow_free ? "Comment, or your own answer" : "Comment (optional)";
+  return `
+  <article class="card q ${triage ? "blocking" : ""}" aria-labelledby="t-${esc(q.id)}">
+    <header>${askerBlock(q)}<span class="row" style="margin-left:auto"><span class="chip">${esc(q.id)}</span>${kindBadge(q)}${ctxChips(q.context || {})}</span></header>
+    <div class="body stack">
+      <h3 id="t-${esc(q.id)}">${esc(q.title)}</h3>
+      ${q.body ? `<div class="md">${md(q.body)}</div>` : ""}
+      ${opts ? `<div class="row" role="group" aria-label="Choices">${opts}</div>` : ""}
+      <div><label class="field" for="c-${esc(q.id)}">${needsComment ? "Why you accept this risk (required)" : hint}</label>
+      <textarea id="c-${esc(q.id)}" data-q="${esc(q.id)}" placeholder="${q.kind === "validation" ? "What should change, if anything" : "Add context for the agent"}">${esc(dr.comment)}</textarea></div>
+    </div>
+    <footer><span class="err" id="e-${esc(q.id)}" role="alert">${esc(errors[q.id] || "")}</span>
+      <button type="button" class="btn primary" data-send="${esc(q.id)}">Send answer</button></footer>
+  </article>`;
+}
+
+function bindQuestions() {
+  document.querySelectorAll("button.choice").forEach(b => b.onclick = () => {
+    const dr = drafts[b.dataset.q];
+    dr.choice = dr.choice === b.dataset.choice ? "" : b.dataset.choice;
+    render();
+  });
+  document.querySelectorAll("textarea[data-q]").forEach(t => t.oninput = () => { drafts[t.dataset.q].comment = t.value; });
+  document.querySelectorAll("button[data-send]").forEach(b => b.onclick = () => send(b.dataset.send, b));
+}
+
+async function send(id, btn) {
+  const dr = drafts[id];
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const r = await fetch("/api/answer", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Lacarta-Token": TOKEN },
+      body: JSON.stringify({ id, choice: dr.choice, comment: dr.comment }),
+    });
+    const j = await r.json();
+    if (!r.ok) { errors[id] = j.error || "The answer was not saved."; }
+    else { delete drafts[id]; delete errors[id]; }
+  } catch (e) {
+    errors[id] = "The console server is not reachable. Check that `lacarta.py serve` is running, then send again.";
+  }
+  lastJson = "";
+  await poll();
+  render();
+}
+
+function specReviewCard(st, d) {
+  const [title, text] = SPEC_REVIEW_TEXT[d.spec_review];
+  const revs = st.reviews.filter(r => r.phase === "spec").reverse();
+  const fs = st.findings.filter(f => f.phase === "spec" && (UNRESOLVED.has(f.status) || d.spec_review !== "passed"));
+  return `<section class="card stack" style="margin-bottom:16px" aria-label="Independent specification review">
+    <div class="row"><span class="overline">Independent specification review</span>${badge(d.spec_review, title)}</div>
+    <div class="small">${esc(text)}</div>
+    ${revs.length ? `<div class="list">${revs.slice(0, 1).map(reviewRow).join("")}</div>` : ""}
+    ${revs.length > 1 ? `<div class="small muted">${revs.length - 1} earlier ${revs.length === 2 ? "review" : "reviews"} under Phases & reviews.</div>` : ""}
+    ${fs.length ? `<div class="overline">Findings · ${fs.length}</div><div class="list">${fs.map(findingRow).join("")}</div>` : ""}
+  </section>`;
+}
+
+function viewSpecs(st, d) {
+  if (!SPEC_ORDER.includes(specTab)) specTab = "functional";
+  const s = st.specs[specTab];
+  const tabs = SPEC_ORDER.map(k => {
+    const sp = st.specs[k];
+    const tone = sp.status === "approved" ? "success" : sp.status === "in-review" ? "info" : sp.status === "changes-requested" ? "danger" : sp.status === "changed" ? "warning" : "";
+    return `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === specTab}"><span class="dot ${tone}" aria-hidden="true"></span>${esc(sp.title)}</button>`;
+  }).join("");
+  const decs = st.decisions.filter(x => x.spec === specTab).reverse();
+  return `
+    <h1>Specifications</h1>
+    <p class="lede">The source of truth. Decisions that change a spec are listed beside it.</p>
+    ${st.stage === "specification" || st.reviews.some(r => r.phase === "spec") ? specReviewCard(st, d) : ""}
+    <div class="tabs" role="tablist">${tabs}</div>
+    <div class="split">
+      <article class="card">
+        <div class="row" style="margin-bottom:16px">${badge(s.status, label(s.status))}<span class="small muted">Revision ${s.revision}${s.approved_at ? ` · approved ${ago(s.approved_at)}` : ""}</span><span class="chip" style="margin-left:auto">.lacarta/specs/${esc(specTab)}.md</span></div>
+        <div class="md wide">${md(data.specs[specTab])}</div>
+      </article>
+      <aside class="card"><div class="overline" style="margin-bottom:8px">Decisions on this spec · ${decs.length}</div>
+        <div class="list">${decs.length ? decs.map(decisionRow).join("") : '<div class="small muted">None yet.</div>'}</div></aside>
+    </div>`;
+}
+
+function bindTabs() {
+  document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { specTab = b.dataset.tab; render(); });
+  document.querySelectorAll("[data-filter]").forEach(b => b.onclick = () => { findingFilter = b.dataset.filter; render(); });
+}
+
+function decisionRow(x) {
+  return `<div><div class="row"><span class="chip">${esc(x.id)}</span>${byBadge(x.by, x.agent)}${answeredTo(x)}</div>
+    <div style="margin-top:4px"><strong>${esc(x.title)}</strong></div>
+    <div class="small">${esc(x.decision)}</div>
+    ${x.rationale ? `<div class="small muted">${esc(x.rationale)}</div>` : ""}
+    <div class="small muted">${x.source ? esc(x.source) + " · " : ""}${ago(x.at)}</div></div>`;
+}
+
+function reviewRow(r) {
+  const report = data.reports[r.id];
+  return `<div><div class="row"><span class="chip">${esc(r.id)}</span><strong>${esc(label(r.type))} review</strong>${badge(r.verdict, r.verdict === "pass" ? "Passed" : "Failed")}${r.agent && agentById(r.agent) ? agentChip(r.agent) : `<span class="small muted">${esc(r.reviewer)}</span>`}<span class="small muted">${ago(r.at)}</span></div>
+    <div class="small" style="margin-top:4px">${esc(r.summary)}</div>
+    ${report ? `<details style="margin-top:6px"><summary class="small">Read report</summary><div class="md wide">${md(report)}</div></details>` : ""}</div>`;
+}
+
+function findingRow(f) {
+  return `<div><div class="row"><span class="chip">${esc(f.id)}</span>${sevBadge(f.severity)}${badge(f.status, label(f.status))}<span>${esc(f.title)}</span>${f.found_by ? agentChip(f.found_by, false) : ""}</div>
+    ${f.location ? `<div class="small muted" style="margin-top:4px"><code>${esc(f.location)}</code></div>` : ""}
+    ${f.resolution ? `<div class="small" style="margin-top:4px"><span class="muted">Resolution:</span> ${esc(f.resolution)}</div>` : ""}</div>`;
+}
+
+function viewPhases(st, d) {
+  const block = (pid, title, meta, extra) => {
+    const revs = st.reviews.filter(r => r.phase === pid).reverse();
+    const fs = st.findings.filter(f => f.phase === pid);
+    return `<article class="card stack">${title}${meta}
+      ${extra || ""}
+      <div class="overline">Reviews · ${revs.length}</div>
+      <div class="list">${revs.length ? revs.map(reviewRow).join("") : '<div class="small muted">No review recorded yet.</div>'}</div>
+      ${fs.length ? `<div class="overline">Findings · ${fs.length}</div><div class="list">${fs.map(findingRow).join("")}</div>` : ""}
+    </article>`;
+  };
+  const phases = st.phases.map(p => block(p.id,
+    `<div class="row"><span class="overline">Phase ${p.id}</span>${badge(p.status, label(p.status))}</div><h3>${esc(p.title)}</h3>`,
+    `<div class="md">${md(p.goal)}</div>`,
+    (p.scope.length ? `<ul class="small" style="margin:0;padding-left:20px">${p.scope.map(s => `<li>${mdInline(s)}</li>`).join("")}</ul>` : "") +
+    (p.covers.length ? `<div class="row">${p.covers.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : "")
+  )).join("");
+  const showFinal = st.stage === "final-review" || st.stage === "done" || st.reviews.some(r => r.phase === "final");
+  const showSpec = st.reviews.some(r => r.phase === "spec");
+  return `
+    <h1>Phases & reviews</h1>
+    <p class="lede">Each phase ends with a functional review, a security review and your approval. Plan: ${badge(st.plan.status, label(st.plan.status))}</p>
+    ${blockedBanner(d)}
+    <div class="stack">
+    ${showSpec ? block("spec", `<div class="row"><span class="overline">Before implementation</span>${badge(d.spec_review, SPEC_REVIEW_TEXT[d.spec_review][0])}</div><h3>Independent specification review</h3>`,
+      `<p class="small muted" style="margin:0">Run by fresh agents that saw only the specs, the plan and the decision log.</p>`) : ""}
+    ${phases || '<div class="card empty">No phases planned yet. The agent proposes the plan once the specs are written.</div>'}
+    ${showFinal ? block("final", `<div class="row"><span class="overline">Final</span>${badge(st.stage === "done" ? "done" : "in-progress", st.stage === "done" ? "Done" : "In progress")}</div><h3>Independent final review</h3>`,
+      `<p class="small muted" style="margin:0">Run by fresh agents that saw only the repository.</p>`) : ""}</div>`;
+}
+
+function viewFindings(st, d) {
+  const list = st.findings.filter(f => findingFilter === "all" || UNRESOLVED.has(f.status))
+    .sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity));
+  return `
+    <h1>Findings</h1>
+    <p class="lede">From functional and security reviews. High and critical stop development until you decide.</p>
+    ${blockedBanner(d)}
+    <div class="tabs" role="tablist"><button type="button" data-filter="unresolved" aria-selected="${findingFilter === "unresolved"}">Unresolved</button><button type="button" data-filter="all" aria-selected="${findingFilter === "all"}">All · ${st.findings.length}</button></div>
+    ${list.length ? `<div class="table-wrap"><table class="data"><thead><tr><th>ID</th><th>Severity</th><th>Finding</th><th>Where</th><th>Status</th></tr></thead><tbody>
+    ${list.map(f => `<tr><td class="id">${esc(f.id)}</td><td>${sevBadge(f.severity)}</td>
+      <td><strong>${esc(f.title)}</strong>${f.detail ? `<details><summary class="small">Details</summary><div class="md wide">${md(f.detail)}</div></details>` : ""}${f.resolution ? `<div class="small muted">${esc(f.resolution)}</div>` : ""}</td>
+      <td class="small">${esc(phaseName(f.phase))} · ${esc(f.review)}${f.location ? `<br><code>${esc(f.location)}</code>` : ""}${f.found_by ? `<div style="margin-top:4px">${agentChip(f.found_by, false)}</div>` : ""}</td>
+      <td>${badge(f.status, label(f.status))}</td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="card empty">${findingFilter === "all" ? "No findings recorded yet." : "No unresolved findings."}</div>`}`;
+}
+
+function viewDecisions(st) {
+  const list = [...st.decisions].reverse();
+  return `
+    <h1>Decisions</h1>
+    <p class="lede">Everything decided so far: your answers and the choices the agents made and logged.</p>
+    ${list.length ? `<div class="table-wrap"><table class="data"><thead><tr><th>ID</th><th>Decision</th><th>By</th><th>Applies to</th><th>When</th></tr></thead><tbody>
+    ${list.map(x => `<tr><td class="id">${esc(x.id)}</td><td><strong>${esc(x.title)}</strong><div>${esc(x.decision)}</div>${x.rationale ? `<div class="small muted">${esc(x.rationale)}</div>` : ""}</td>
+      <td>${byBadge(x.by, x.agent)}<div style="margin-top:4px">${answeredTo(x)}</div></td>
+      <td class="small">${[x.spec ? `spec: ${esc(x.spec)}` : "", x.phase != null ? esc(phaseName(x.phase)) : "", x.source ? esc(x.source) : ""].filter(Boolean).join("<br>") || '<span class="muted">Project</span>'}</td>
+      <td class="small muted">${ago(x.at)}</td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="card empty">No decisions yet. Your answers to questions will be recorded here.</div>`}`;
+}
+
+function activityRows(items) {
+  return items.length ? items.map(a => `<div class="row">${a.agent && agentById(a.agent) ? avatar(agentById(a.agent)) : ""}<span class="badge plain">${esc(label(a.kind))}</span><span>${esc(a.text)}</span><span class="small muted" style="margin-left:auto">${ago(a.at)}</span></div>`).join("") : '<div class="small muted">Nothing yet.</div>';
+}
+function viewModels(st) {
+  const cat = data.catalog, roles = st.models.roles;
+  const current = r => modelDraft[r] ?? roles[r];
+  const dirty = Object.keys(modelDraft).some(r => modelDraft[r] !== roles[r]);
+  const stages = [...new Set(Object.values(cat.roles).map(x => x.stage))];
+  const options = sel => Object.entries(cat.models).map(([alias, m]) =>
+    `<option value="${esc(alias)}" ${alias === sel ? "selected" : ""}>${esc(m.name)}</option>`).join("");
+  const groups = stages.map(stage => {
+    const rows = Object.entries(cat.roles).filter(([, x]) => x.stage === stage).map(([r, x]) => `
+      <div class="model-row">
+        <div><label class="field" for="m-${esc(r)}" style="color:var(--text);font-size:15px;line-height:22px">${esc(x.label)}</label>
+          <div class="small muted">${esc(x.about)}</div>
+          <div class="small muted">Default ${esc(cat.models[x.default].name)} · <code>${esc(cat.models[current(r)].id)}</code>${modelDraft[r] !== undefined && modelDraft[r] !== roles[r] ? ` · <strong style="color:var(--warning)">Unsaved</strong>` : ""}</div></div>
+        <select id="m-${esc(r)}" data-role="${esc(r)}" aria-label="Model for ${esc(x.label)}">${options(current(r))}</select>
+      </div>`).join("");
+    return `<section class="card"><div class="overline" style="margin-bottom:8px">${esc(stage)}</div><div class="list">${rows}</div></section>`;
+  }).join("");
+  return `
+    <h1>Models</h1>
+    <p class="lede">Which model runs each part of the framework. Agents read this before every spawn, so a change applies to the next agent started.</p>
+    ${st.models.confirmed ? "" : `<div class="banner info">${ICON_INFO}<div><strong>Confirm the models to let the agents start.</strong> The defaults are preselected; change any of them, then confirm.</div></div>`}
+    <div class="stack">${groups}</div>
+    <div class="row" style="margin-top:16px;justify-content:flex-end">
+      <span class="err" role="alert" style="margin-right:auto">${esc(modelError)}</span>
+      ${dirty ? `<button type="button" class="btn" id="models-reset">Discard changes</button>` : ""}
+      ${st.models.confirmed
+        ? `<button type="button" class="btn primary" id="models-save" ${dirty ? "" : "disabled"}>Save models</button>`
+        : `<button type="button" class="btn primary" id="models-confirm">Confirm models and start</button>`}
+    </div>`;
+}
+
+async function saveModels(confirm, btn) {
+  btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    const r = await fetch("/api/models", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Lacarta-Token": TOKEN },
+      body: JSON.stringify({ roles: modelDraft, confirm }),
+    });
+    const j = await r.json();
+    if (!r.ok) modelError = j.error || "The models were not saved.";
+    else { modelDraft = {}; modelError = ""; }
+  } catch (e) {
+    modelError = "The console server is not reachable. Check that `lacarta.py serve` is running, then save again.";
+  }
+  lastJson = "";
+  await poll();
+  render();
+}
+
+function bindModels() {
+  document.querySelectorAll("select[data-role]").forEach(s => s.onchange = () => { modelDraft[s.dataset.role] = s.value; render(); });
+  const save = document.getElementById("models-save"), confirm = document.getElementById("models-confirm"), reset = document.getElementById("models-reset");
+  if (save) save.onclick = () => saveModels(false, save);
+  if (confirm) confirm.onclick = () => saveModels(true, confirm);
+  if (reset) reset.onclick = () => { modelDraft = {}; render(); };
+}
+
+function viewActivity(st) {
+  return `<h1>Activity</h1><p class="lede">${st.activity.length} events, newest first.</p><div class="card list">${activityRows([...st.activity].reverse())}</div>`;
+}
+
+async function poll() {
+  const live = document.getElementById("live");
+  try {
+    const r = await fetch("/api/state", { cache: "no-store", headers: { "X-Lacarta-Token": TOKEN } });
+    const txt = await r.text();
+    live.className = "live"; live.innerHTML = `<span class="long">Live · </span>updated ${new Date().toLocaleTimeString()}`;
+    if (txt === lastJson) return false;
+    lastJson = txt; data = JSON.parse(txt);
+    return true;
+  } catch (e) {
+    live.className = "live off"; live.textContent = "Disconnected: is `serve` running?";
+    return false;
+  }
+}
+
+function typing() {
+  const a = document.activeElement;
+  return a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT" || a.tagName === "SELECT");
+}
+async function tick() {
+  if (await poll()) pendingRender = true;
+  if (pendingRender && !typing()) { pendingRender = false; render(); }
+}
+
+window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+document.addEventListener("focusout", () => setTimeout(() => { if (pendingRender && !typing()) { pendingRender = false; render(); } }, 0));
+document.getElementById("theme").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("lacarta-theme", root.dataset.theme); } catch (e) {}
+};
+try { const t = localStorage.getItem("lacarta-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+tick(); setInterval(tick, 2500);
+</script>
+</body>
+</html>
