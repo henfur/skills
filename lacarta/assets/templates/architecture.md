@@ -2,7 +2,7 @@
 
 ## 1. Context
 
-TODO: the system and everything it talks to (users, external services, data stores). A diagram in a fenced `mermaid` or ASCII block is welcome.
+TODO: the system and everything it talks to (users, external services, data stores), drawn as a ```` ```mermaid ```` `flowchart` (the console renders it).
 
 ## 2. Components
 
@@ -12,7 +12,7 @@ TODO: the system and everything it talks to (users, external services, data stor
 
 ## 3. Data model
 
-TODO: entities, key fields, relationships, and invariants the code must keep.
+TODO: entities, key fields, relationships, and invariants the code must keep. Draw the entities as a ```` ```mermaid ```` `erDiagram`.
 
 ## 4. Interfaces
 
@@ -20,7 +20,7 @@ TODO: public APIs, CLI commands, events and file formats, with request and respo
 
 ## 5. Key flows
 
-TODO: how the components cooperate for the main functional requirements (reference FR IDs).
+TODO: how the components cooperate for the main functional requirements (reference FR IDs). One ```` ```mermaid ```` `sequenceDiagram` per non-trivial flow.
 
 ## 6. Cross-cutting concerns
 

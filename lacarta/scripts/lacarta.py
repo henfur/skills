@@ -1028,6 +1028,7 @@ def cmd_final_complete(args, store):
 # ------------------------------------------------------------------ server
 
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+VENDOR = {"/vendor/marked.min.js", "/vendor/purify.min.js", "/vendor/mermaid.min.js"}
 WILDCARD = {"0.0.0.0", "::", ""}
 
 
@@ -1050,12 +1051,13 @@ def make_handler(store, token, port, extra_hosts=(), require_key=False, check_ho
         def log_message(self, *a):
             pass
 
-        def _send(self, code, body, ctype="application/json"):
+        def _send(self, code, body, ctype="application/json", cache=False):
             data = body if isinstance(body, bytes) else body.encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype + "; charset=utf-8" if not ctype.endswith("javascript") else ctype)
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
+            # Vendored libraries never change for a given skill release; everything else is live state.
+            self.send_header("Cache-Control", "private, max-age=86400" if cache else "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "no-referrer")
@@ -1084,8 +1086,8 @@ def make_handler(store, token, port, extra_hosts=(), require_key=False, check_ho
             if not self._host_ok():
                 return
             path, _, query = self.path.partition("?")
-            if path in ("/vendor/marked.min.js", "/vendor/purify.min.js"):
-                return self._send(200, (UI_DIR / path.lstrip("/")).read_bytes(), "text/javascript")
+            if path in VENDOR:
+                return self._send(200, (UI_DIR / path.lstrip("/")).read_bytes(), "text/javascript", cache=True)
             if path == "/":
                 if not self._key_ok(urllib.parse.parse_qs(query).get("key", [""])[0]):
                     return

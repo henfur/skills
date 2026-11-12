@@ -17,7 +17,7 @@ What an attacker would want, and what a failure would cost.
 
 ## 3. Trust boundaries and data flows
 
-TODO: every place data crosses from a less trusted zone to a more trusted one (network edge, API, file upload, third-party callback, build pipeline). Name the flows: DF-1, DF-2…
+TODO: every place data crosses from a less trusted zone to a more trusted one (network edge, API, file upload, third-party callback, build pipeline). Name the flows: DF-1, DF-2… Draw them as a ```` ```mermaid ```` `flowchart` with one `subgraph` per trust zone and the DF IDs as edge labels.
 
 ## 4. Threats (STRIDE)
 

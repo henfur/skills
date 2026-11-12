@@ -45,6 +45,7 @@ Templates are in `.lacarta/specs/`. Keep their section structure: the user learn
 
 - Every functional requirement gets an ID (`FR-n`) and acceptance criteria a reviewer can verify against running code. "Fast" is not a criterion; "search returns in under 300 ms for 10k items" is.
 - Architecture decisions that would be expensive to reverse get an `AD-n` entry with the alternatives you rejected.
+- Diagrams are ```` ```mermaid ```` blocks, which the console draws: context and components as a `flowchart`, the data model as an `erDiagram`, key flows as `sequenceDiagram`s, and the threat model's data flows as a `flowchart` with one `subgraph` per trust zone. Keep diagrams and prose consistent: the spec reviewer checks both, and a diagram that disagrees with the text is an incoherence.
 - The stack pins versions and names licences.
 - The threat model walks each data flow through STRIDE. Every threat at medium or above gets a mitigation that becomes a testable `SR-n` requirement. Mark a section that does not apply as `Not applicable: <reason>` rather than deleting it, so the reader sees it was considered.
 

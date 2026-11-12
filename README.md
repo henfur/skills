@@ -17,7 +17,7 @@ lacarta/
 ├── references/               # stage guides and reviewer prompts
 └── assets/
     ├── templates/            # the four spec templates
-    └── ui/                   # console page; vendored marked 12.0.2 and DOMPurify 3.1.6
+    └── ui/                   # console page; vendored marked 12.0.2, DOMPurify 3.1.6, Mermaid 10.9.1
 ```
 
 ## Install

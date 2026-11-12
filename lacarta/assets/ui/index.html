@@ -270,6 +270,13 @@ details > summary::before { content: "▸ "; }
 details[open] > summary::before { content: "▾ "; }
 details .md { margin-top: 12px; padding: 12px 16px; background: var(--surface-sunken); border-radius: var(--radius-lg); }
 .empty { padding: 32px 16px; text-align: center; color: var(--text-secondary); }
+figure.diagram {
+  margin: 0 0 16px; padding: 16px; background: var(--surface-raised); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); overflow-x: auto; text-align: center;
+}
+figure.diagram svg { max-width: 100%; height: auto; }
+figure.diagram .diagram-src { text-align: left; margin-top: 8px; }
+figure.diagram .err { text-align: left; }
 .chip { font-family: var(--mono); font-size: 12px; line-height: 16px; padding: 1px 6px; border-radius: var(--radius-xs); background: var(--surface-sunken); color: var(--text-secondary); }
 
 @media (max-width: 900px) {
@@ -412,6 +419,7 @@ function render() {
   bindQuestions();
   bindTabs();
   bindModels();
+  renderDiagrams(document.getElementById("view"));
 }
 
 function blockedBanner(d) {
@@ -780,6 +788,98 @@ async function tick() {
   if (pendingRender && !typing()) { pendingRender = false; render(); }
 }
 
+// ---- Mermaid diagrams: ```mermaid blocks in any markdown become SVG.
+// The 3 MB library loads only once a page has a diagram. Renders are cached by theme and source,
+// so the 2.5 s refresh re-inserts the SVG instead of redrawing it.
+const diagramCache = new Map();
+let mermaidLoad = null, mermaidTheme = "", diagramSeq = 0;
+
+function loadMermaid() {
+  if (!mermaidLoad) {
+    mermaidLoad = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "/vendor/mermaid.min.js";
+      s.onload = () => window.mermaid ? resolve(window.mermaid) : reject(new Error("Mermaid did not load."));
+      s.onerror = () => { mermaidLoad = null; reject(new Error("The diagram library could not be loaded from the console server.")); };
+      document.head.appendChild(s);
+    });
+  }
+  return mermaidLoad;
+}
+
+function themeName() {
+  const t = document.documentElement.dataset.theme;
+  return t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+
+function configureMermaid(m) {
+  const name = themeName();
+  if (mermaidTheme === name) return;
+  const v = n => getComputedStyle(document.documentElement).getPropertyValue(`--${n}`).trim();
+  m.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",       // no scripts or click handlers in labels
+    theme: "base",
+    darkMode: name === "dark",
+    fontFamily: "Manrope, ui-sans-serif, system-ui, sans-serif",
+    flowchart: { htmlLabels: false, curve: "basis" },  // plain SVG text: no foreignObject HTML
+    themeVariables: {
+      fontFamily: "Manrope, ui-sans-serif, system-ui, sans-serif", fontSize: "14px",
+      background: v("surface"), textColor: v("text"),
+      primaryColor: v("brand-subtle"), primaryTextColor: v("text"), primaryBorderColor: v("brand-border"),
+      secondaryColor: v("info-subtle"), secondaryTextColor: v("text"), secondaryBorderColor: v("info-border"),
+      tertiaryColor: v("surface-sunken"), tertiaryTextColor: v("text"), tertiaryBorderColor: v("border"),
+      lineColor: v("border-strong"), edgeLabelBackground: v("surface-raised"),
+      clusterBkg: v("surface-sunken"), clusterBorder: v("border"), titleColor: v("text"),
+      noteBkgColor: v("accent-subtle"), noteTextColor: v("text"), noteBorderColor: v("accent-border"),
+      actorBkg: v("brand-subtle"), actorBorder: v("brand-border"), actorTextColor: v("text"),
+      signalColor: v("text-secondary"), signalTextColor: v("text"), labelBoxBkgColor: v("surface-raised"),
+      errorBkgColor: v("danger-subtle"), errorTextColor: v("danger"),
+    },
+  });
+  mermaidTheme = name;
+}
+
+function diagramSource(src) {
+  return `<details class="diagram-src"><summary class="small">Source</summary><pre><code>${esc(src)}</code></pre></details>`;
+}
+
+async function renderDiagrams(root) {
+  const blocks = [...root.querySelectorAll("pre > code.language-mermaid")];
+  if (!blocks.length) return;
+  const figs = blocks.map(code => {
+    const src = code.textContent, fig = document.createElement("figure");
+    fig.className = "diagram";
+    const hit = diagramCache.get(themeName() + "\n" + src);
+    fig.innerHTML = hit || `<div class="small muted">Drawing diagram…</div>`;
+    code.parentElement.replaceWith(fig);
+    return hit ? null : [fig, src];
+  }).filter(Boolean);
+  if (!figs.length) return;
+  let m;
+  try { m = await loadMermaid(); } catch (e) {
+    figs.forEach(([fig, src]) => { fig.innerHTML = `<div class="err">${esc(e.message)}</div>${diagramSource(src)}`; });
+    return;
+  }
+  configureMermaid(m);
+  const theme = themeName();
+  for (const [fig, src] of figs) {
+    let html;
+    try {
+      const { svg } = await m.render(`diagram-${++diagramSeq}`, src);
+      // Mermaid sanitises labels itself; sanitise the SVG again before it touches the page.
+      html = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_TAGS: ["style"] }) + diagramSource(src);
+      diagramCache.set(theme + "\n" + src, html);
+    } catch (e) {
+      const msg = String((e && (e.str || e.message)) || e).split("\n")[0];
+      html = `<div class="err">This diagram has a syntax error: ${esc(msg)}</div>${diagramSource(src)}`;
+      // mermaid can leave its scratch nodes in the body when a diagram fails
+      [`ddiagram-${diagramSeq}`, `diagram-${diagramSeq}`].forEach(id => document.getElementById(id)?.remove());
+    }
+    fig.innerHTML = html;
+  }
+}
+
 window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
 document.addEventListener("focusout", () => setTimeout(() => { if (pendingRender && !typing()) { pendingRender = false; render(); } }, 0));
 document.getElementById("theme").onclick = () => {
@@ -787,7 +887,9 @@ document.getElementById("theme").onclick = () => {
   const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset.theme = dark ? "light" : "dark";
   try { localStorage.setItem("lacarta-theme", root.dataset.theme); } catch (e) {}
+  render();  // diagrams are drawn with the theme's colours
 };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
 try { const t = localStorage.getItem("lacarta-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 tick(); setInterval(tick, 2500);
 </script>
