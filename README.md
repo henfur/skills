@@ -6,7 +6,9 @@ An agent skill that runs every project through the same framework:
 2. **Implementation**: one phase at a time, each closed by a functional review, a security review and your approval. A high or critical finding stops development until you decide.
 3. **Final review**: two fresh agents (functional, security) with no memory of the build, judging only the repository.
 
-A local web console shows the questions waiting for you, the specs, every decision, phases with their reviews, findings and the overall status.
+One web console per machine shows every agent session and project: the questions waiting for you, notifications, each session's chat (with remote control: write to an agent from the browser), and for software projects the specs, every decision, phases with their reviews, findings and the overall status.
+
+Every Claude Code session registers itself through hooks. A session in a folder with a `.lacarta/` software project joins it; any other session appears as a **single-agent task** (overview, chat, questions, activity). More kinds of project (security audit, DevOps) will get their own views. Models are set once per kind of project on the console's Settings page.
 
 ## Layout
 
@@ -22,16 +24,21 @@ lacarta/
 
 ## Install
 
-Claude Code (personal skills):
+Claude Code (personal skills), then the hooks that register every session:
 
 ```bash
 ln -s "$PWD/lacarta" ~/.claude/skills/lacarta
+python3 lacarta/scripts/lacarta.py install      # adds hooks to ~/.claude/settings.json (backup kept); --uninstall removes them
 ```
 
-Then, in any project: "let's build an invoice tracker", or "use lacarta for this".
+New sessions then appear in the console, which the first session starts on its own. In any project: "let's build an invoice tracker", or "use lacarta for this".
 
 ## Console
 
-`python3 lacarta/scripts/lacarta.py serve` serves the console at `http://127.0.0.1:4747/` for the nearest project with a `.lacarta/` folder. By default it binds to loopback, rejects foreign `Host` and `Origin` headers, and requires a per-run token for answers.
+One daemon serves every project at `http://127.0.0.1:4747/`. Sessions start it when they register; `python3 lacarta/scripts/lacarta.py serve` prints its URL, or starts it. Machine-wide state lives in `~/.lacarta/` (`$LACARTA_HOME`): the project registry, settings, single-agent tasks, and `hooks.log` if a hook fails. A software project's state stays in its own `.lacarta/` folder.
 
-To reach it from another machine, bind another address: `serve --host 10.0.0.5` (or `--host 0.0.0.0 --allow-host my-box.lan`). The page and API then require the key printed in the URL (`?key=…`). Traffic is plain HTTP, so use a trusted network, or keep the default and tunnel with `ssh -L 4747:127.0.0.1:4747 host`.
+By default the console binds to loopback, rejects foreign `Host` and `Origin` headers, and requires a per-run token for every change. It only serves session transcripts from inside `~/.claude/`.
+
+**Remote control.** When an agent's turn ends, its Stop hook keeps the session waiting for your next message from the console, for up to 23 hours, instead of returning to the terminal. Press Esc in the terminal to take the session back. Turn it off machine-wide in Settings, or per project in its Chat.
+
+To reach the console from another machine, start it on another address: `serve --host 10.0.0.5` (or `--host 0.0.0.0 --allow-host my-box.lan`). The page and API then require the key printed in the URL (`?key=…`). Traffic is plain HTTP, so use a trusted network, or keep the default and tunnel with `ssh -L 4747:127.0.0.1:4747 host`.

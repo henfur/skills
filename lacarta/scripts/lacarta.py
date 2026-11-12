@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""lacarta: project state, gates and review console for the lacarta framework.
+"""lacarta: one console for every agent session and project on this machine.
 
-State lives in <project>/.lacarta/ (state.json, specs/, reviews/). Every command
-reads and writes that folder under a file lock, and the gates refuse to move the
-project forward while the framework's rules are not met. Standard library only.
+A single daemon (`serve`) shows all projects. Claude Code sessions register themselves
+through hooks (`install`): a session in a folder with a .lacarta/ software project joins
+it as the orchestrator; any other session becomes a single-agent task. The console shows
+each one's chat, questions and activity, and can drive a session remotely.
+
+Machine-wide state lives in ~/.lacarta/ ($LACARTA_HOME): the project registry, settings
+(models per kind of project) and single-agent tasks. A software project's state lives in
+<project>/.lacarta/ (state.json, specs/, reviews/), and its gates refuse to move the project
+forward while the framework's rules are not met. Every write happens under a file lock.
+Standard library only.
 
 Run `lacarta.py <command> --help` for the options of each command.
 """
@@ -15,9 +22,14 @@ import http.server
 import json
 import os
 import secrets
+import shlex
+import signal
 import socket
+import subprocess
 import sys
+import threading
 import time
+import traceback
 import urllib.parse
 from pathlib import Path
 
@@ -30,6 +42,8 @@ SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES = SKILL_DIR / "assets" / "templates"
 UI_DIR = SKILL_DIR / "assets" / "ui"
 STATE_DIR = ".lacarta"
+HOME = Path(os.environ.get("LACARTA_HOME") or "~/.lacarta").expanduser()
+DEFAULT_PORT = 4747
 
 SPECS = {
     "functional": "Functional",
@@ -70,7 +84,20 @@ ROLES = {
     "final_security_review": ("Final security review", "Final review",
                               "Fresh agent that audits the whole repository.", "opus"),
 }
-USE_MODELS = "Use these models"
+USE_MODELS = "Use these models"   # answer of the setup question older projects still carry
+
+# Kinds of project. Each has its own console view and its own roles; the models for every
+# role are set once, machine-wide, on the console's Settings page.
+SINGLE, SOFTWARE = "single", "software"
+KINDS = {
+    SINGLE: {"label": "Single agent", "about": "One agent session on one task: its chat, questions and activity.",
+             "roles": {"agent": ("Agent", "Session", "The CLI session itself. Switch it in the terminal "
+                                 "(`/model` in Claude Code); helpers it spawns use this model too.", "opus")}},
+    SOFTWARE: {"label": "Software development",
+               "about": "Specs, a phase plan, phases gated by functional and security reviews, a final review.",
+               "roles": ROLES},
+}
+PLANNED_KINDS = ["Security audit", "DevOps (Ansible, Terraform)"]
 
 # Agents get a human name so the user knows who is asking. The orchestrator is always A-1.
 AGENT_NAMES = ["Ada", "Basil", "Cleo", "Dorian", "Esme", "Felix", "Gaia", "Hugo", "Iris", "Jonah",
@@ -130,28 +157,41 @@ def now():
 
 # ---------------------------------------------------------------- storage
 
-def find_root(explicit=None):
+def find_root(explicit=None, start=None):
     if explicit:
         return Path(explicit).resolve()
-    here = Path.cwd().resolve()
+    here = Path(start or Path.cwd()).resolve()
     for d in [here, *here.parents]:
         if (d / STATE_DIR / "state.json").exists():
             return d
     return None
 
 
+@contextlib.contextmanager
+def file_lock(path, exclusive):
+    with open(path, "a+") as lf:
+        if fcntl:
+            fcntl.flock(lf, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        yield
+
+
+def write_json(path, data):
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    os.replace(tmp, path)
+
+
 class Store:
-    def __init__(self, root):
+    """One project's state. `root` is the folder the project is about; `dir` holds its state
+    (<root>/.lacarta for a software project, ~/.lacarta/tasks/<id> for a single-agent task)."""
+
+    def __init__(self, root, dir=None):
         self.root = Path(root)
-        self.dir = self.root / STATE_DIR
+        self.dir = Path(dir) if dir else self.root / STATE_DIR
         self.path = self.dir / "state.json"
 
-    @contextlib.contextmanager
     def _lock(self, exclusive):
-        with open(self.dir / ".lock", "a+") as lf:
-            if fcntl:
-                fcntl.flock(lf, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
-            yield
+        return file_lock(self.dir / ".lock", exclusive)
 
     def read(self):
         with self._lock(False):
@@ -164,26 +204,122 @@ class Store:
             state = migrate(json.loads(self.path.read_text()))
             yield state
             refresh(state, self)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(state, indent=2) + "\n")
-            os.replace(tmp, self.path)
-
-
-def default_models(confirmed):
-    return {"confirmed": confirmed, "roles": {r: v[3] for r, v in ROLES.items()}}
+            write_json(self.path, state)
 
 
 def migrate(state):
     """Bring a state file written by an older version up to date."""
-    if "models" not in state:
-        # A project that predates model settings is already under way: keep it moving.
-        state["models"] = default_models(confirmed=True)
-    for r, v in ROLES.items():
-        state["models"]["roles"].setdefault(r, v[3])
+    state.setdefault("template", SOFTWARE)
+    # Models moved to the machine-wide settings; the per-project setup question is obsolete.
+    state.pop("models", None)
+    for q in state.get("questions", []):
+        if q["status"] == "open" and (q.get("effect") or {}).get("type") == "models-confirm":
+            q["status"] = "superseded"
+    state.setdefault("inbox", [])
+    state.setdefault("remote", None)       # None: follow the machine-wide default
+    state.setdefault("listening", None)
+    state.setdefault("attention", None)
     if "agents" not in state:
         state["agents"] = []
         new_agent(state, "orchestrator", "Runs the framework and talks to you.", log_it=False)
     return state
+
+
+# --------------------------------------------------------------------- hub
+# ~/.lacarta/hub.json lists every project the console shows and maps CLI sessions to them.
+
+def hub_path():
+    return HOME / "hub.json"
+
+
+def hub_read():
+    if not hub_path().exists():
+        return {"projects": {}, "sessions": {}}
+    with file_lock(HOME / ".lock", False):
+        return json.loads(hub_path().read_text())
+
+
+@contextlib.contextmanager
+def hub_edit():
+    HOME.mkdir(parents=True, exist_ok=True)
+    with file_lock(HOME / ".lock", True):
+        hub = json.loads(hub_path().read_text()) if hub_path().exists() else {"projects": {}, "sessions": {}}
+        yield hub
+        write_json(hub_path(), hub)
+
+
+def slug(text):
+    out = "".join(c if c.isalnum() else "-" for c in text.lower()).strip("-")
+    return "-".join(x for x in out.split("-") if x)[:32] or "project"
+
+
+def register_software(root, name):
+    """Add a software project to the hub (idempotent); returns its id."""
+    root = Path(root).resolve()
+    with hub_edit() as hub:
+        for pid, p in hub["projects"].items():
+            if p.get("root") == str(root):
+                p["name"] = name
+                return pid
+        pid = f"{slug(name)}-{hashlib.sha256(str(root).encode()).hexdigest()[:4]}"
+        hub["projects"][pid] = {"id": pid, "template": SOFTWARE, "name": name, "root": str(root),
+                                "created_at": now(), "archived": False}
+        return pid
+
+
+def project_store(pid):
+    p = hub_read()["projects"].get(pid)
+    if not p:
+        raise GateError(f"No project {pid} in {hub_path()}.")
+    if p["template"] == SINGLE:
+        return Store(p.get("cwd") or HOME, HOME / "tasks" / pid)
+    return Store(p["root"])
+
+
+def settings_path():
+    return HOME / "settings.json"
+
+
+def default_settings():
+    return {"models": {k: {r: v[3] for r, v in kind["roles"].items()} for k, kind in KINDS.items()},
+            "remote_control": True}
+
+
+def settings_read():
+    s = default_settings()
+    if settings_path().exists():
+        saved = json.loads(settings_path().read_text())
+        for k, roles in (saved.get("models") or {}).items():
+            if k in s["models"]:
+                s["models"][k].update({r: m for r, m in roles.items() if r in s["models"][k] and m in MODELS})
+        s["remote_control"] = bool(saved.get("remote_control", s["remote_control"]))
+    return s
+
+
+def settings_update(models=None, remote_control=None):
+    with hub_edit():                      # the hub lock also guards settings.json
+        s = settings_read()
+        for k, roles in (models or {}).items():
+            if k not in KINDS:
+                raise GateError(f"Unknown kind of project {k}. Kinds: {', '.join(KINDS)}.")
+            for r, m in roles.items():
+                if r not in KINDS[k]["roles"]:
+                    raise GateError(f"Unknown role {r} for {k}. Roles: {', '.join(KINDS[k]['roles'])}.")
+                if m not in MODELS:
+                    raise GateError(f"Unknown model {m}. Models: {', '.join(MODELS)}.")
+                s["models"][k][r] = m
+        if remote_control is not None:
+            s["remote_control"] = bool(remote_control)
+        write_json(settings_path(), s)
+    return s
+
+
+def model_for(state, role):
+    return settings_read()["models"][state["template"]].get(role) or KINDS[state["template"]]["roles"][role][3]
+
+
+def remote_on(state):
+    return settings_read()["remote_control"] if state.get("remote") is None else state["remote"]
 
 
 # ------------------------------------------------------------------ agents
@@ -193,15 +329,20 @@ def new_agent(state, role, task, phase=None, log_it=True):
     n = len(state["agents"])
     name = next((x for x in AGENT_NAMES if x not in used), f"{AGENT_NAMES[n % len(AGENT_NAMES)]} {n // len(AGENT_NAMES) + 1}")
     a = {
-        "id": f"A-{n + 1}", "name": name, "role": role, "model": state["models"]["roles"][role],
+        "id": f"A-{n + 1}", "name": name, "role": role, "model": model_for(state, role),
         "task": task, "phase": phase, "status": "working", "summary": "",
         "avatar": None,  # reserved for a custom profile picture; the console shows initials meanwhile
         "started_at": now(), "updated_at": now(), "finished_at": None,
     }
     state["agents"].append(a)
     if log_it:
-        log(state, f"{name} started as {ROLES[role][0].lower()} on {MODELS[a['model']]['name']}: {task}", "agent")
+        log(state, f"{name} started as {role_label(state, role).lower()} on {MODELS[a['model']]['name']}: {task}",
+            "agent")
     return a
+
+
+def role_label(state, role):
+    return KINDS[state["template"]]["roles"].get(role, (role,))[0]
 
 
 def get_agent(state, aid):
@@ -232,32 +373,24 @@ def agent_status(state, a):
             return "done"
         if blocked_reason(state):
             return "blocked"
+        if state.get("attention"):
+            return "terminal"       # the CLI is waiting for the user at the terminal (a permission prompt)
+        if listening(state):
+            return "listening"      # turn finished; the session waits for a console message
     return a["status"]
 
 
-def set_models(state, roles, by):
-    """Apply {role: model} changes, logging each one as a decision."""
-    for role, model in roles.items():
-        if role not in ROLES:
-            raise GateError(f"Unknown role {role}. Roles: {', '.join(ROLES)}.")
-        if model not in MODELS:
-            raise GateError(f"Unknown model {model}. Models: {', '.join(MODELS)}.")
-        old = state["models"]["roles"][role]
-        if old == model:
-            continue
-        state["models"]["roles"][role] = model
-        state["decisions"].append({
-            "id": next_id(state, "D"), "title": f"Model for {ROLES[role][0].lower()}",
-            "decision": f"{MODELS[model]['name']} (was {MODELS[old]['name']})", "rationale": "",
-            "source": None, "by": by, "spec": None, "phase": None, "at": now(),
-        })
-        log(state, f"{ROLES[role][0]} now uses {MODELS[model]['name']}.", "models")
+def pid_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
 
 
-def require_models(state):
-    if not state["models"]["confirmed"]:
-        q = open_question(state, {"type": "models-confirm"})
-        raise GateError("The user has not confirmed the models yet" + (f" (`wait {q['id']}`)." if q else "."))
+def listening(state):
+    lst = state.get("listening")
+    return bool(lst) and pid_alive(lst.get("pid"))
 
 
 def next_id(state, prefix):
@@ -382,11 +515,19 @@ def next_action(state, store):
     stage = state["stage"]
     if stage == "stopped":
         return "The project is stopped. Nothing advances until the user restarts it."
+    if pending_messages(state):
+        return "The user sent messages from the console: `inbox` shows them. Treat them as the user's words."
     talk = [q for q in state["questions"] if discussing(q)]
     if talk:
         return (f"The user wants to talk about {talk[0]['id']} before answering: read the thread and "
                 f"`reply {talk[0]['id']} --message ...`, then `wait` again. The question stays open.")
-    triage =[q for q in state["questions"]
+    if state["template"] == SINGLE:
+        waiting = [q["id"] for q in state["questions"] if q["status"] == "open"]
+        if stage == "ended":
+            return "The session ended."
+        return (f"Wait for the user to answer {', '.join(waiting)} in the console." if waiting
+                else "Work on the task with the user.")
+    triage = [q for q in state["questions"]
               if q["status"] == "open" and (q.get("effect") or {}).get("type") == "finding-triage"]
     if triage:
         return f"Blocked: wait for the user's decision on {triage[0]['id']} (`wait {triage[0]['id']}`). Do not write code."
@@ -395,10 +536,6 @@ def next_action(state, store):
         return (f"Blocked on {f['id']} ({f['status']}): fix it, re-run the {f['review']} review, "
                 f"then `finding resolve {f['id']} --status fixed`. Nothing else advances.")
     waiting = [q for q in state["questions"] if q["status"] == "open"]
-    if not state["models"]["confirmed"]:
-        q = open_question(state, {"type": "models-confirm"})
-        return (f"Wait for the user to set and confirm the models in the console (`wait {q['id']}`)."
-                if q else "Models are not confirmed.")
     if stage == "specification":
         incomplete = [k for k in SPECS if todo_lines(store, k)]
         if incomplete:
@@ -452,19 +589,27 @@ def next_action(state, store):
 
 
 def derived(state, store):
+    common = {
+        "next": next_action(state, store),
+        "open_questions": sum(q["status"] == "open" for q in state["questions"]),
+        "agent_status": {a["id"]: agent_status(state, a) for a in state["agents"]},
+        "listening": listening(state),
+        "remote": remote_on(state),
+        "pending_messages": len(pending_messages(state)),
+    }
+    if state["template"] == SINGLE:
+        return {**common, "blocked": None}
     sev = {s: 0 for s in SEVERITIES}
     for f in state["findings"]:
         if f["status"] in UNRESOLVED:
             sev[f["severity"]] += 1
     return {
+        **common,
         "blocked": blocked_reason(state),
-        "next": next_action(state, store),
         "spec_review": spec_review_status(state, store),
-        "open_questions": sum(q["status"] == "open" for q in state["questions"]),
         "open_findings": sev,
         "specs_approved": sum(s["status"] == "approved" for s in state["specs"].values()),
         "phases_done": sum(p["status"] == "done" for p in state["phases"]),
-        "agent_status": {a["id"]: agent_status(state, a) for a in state["agents"]},
     }
 
 
@@ -586,10 +731,6 @@ def apply_effect(state, q):
             log(state, "Final review approved. Project done.", "stage")
         else:
             log(state, "Final approval refused: changes requested.", "stage")
-    elif t == "models-confirm":
-        state["models"]["confirmed"] = True
-        log(state, "Models confirmed: " + ", ".join(
-            f"{ROLES[r][0]} {MODELS[m]['name']}" for r, m in state["models"]["roles"].items()) + ".", "models")
     elif t == "finding-triage":
         f = next(f for f in state["findings"] if f["id"] == eff["finding"])
         if choice == TRIAGE_ACCEPT:
@@ -601,6 +742,426 @@ def apply_effect(state, q):
         else:
             f["status"] = "fixing"
         log(state, f"{f['id']} triaged: {choice or comment}.", "finding")
+
+
+# ---------------------------------------------------------------- sessions
+# A CLI session (Claude Code for now) registers through hooks and is attached to agent A-1 of
+# its project. Messages typed in the console wait in the project's inbox until a hook hands
+# them to the agent: after its next tool call, or when it ends its turn.
+
+CONSOLE_TAG = "[lacarta console]"
+LISTEN_MAX = 23 * 3600          # a listening Stop hook gives up before its 24 h hook timeout
+CLI_CLAUDE = "claude-code"
+
+
+def pending_messages(state):
+    return [m for m in state.get("inbox", []) if not m.get("delivered_at")]
+
+
+def add_message(state, text):
+    text = (text or "").strip()
+    if not text:
+        raise GateError("Write a message.")
+    a = get_agent(state, ORCHESTRATOR)
+    if not a.get("session") or a["session"].get("ended_at"):
+        raise GateError("No agent session is connected to this project right now, so nothing would read it.")
+    m = {"id": next_id(state, "M"), "text": text, "at": now(), "delivered_at": None}
+    state["inbox"].append(m)
+    del state["inbox"][:-200]
+    log(state, "You sent a message from the console.", "chat")
+    return m
+
+
+def take_messages(state):
+    """Mark the pending messages delivered; returns them as one prompt for the agent ("" if none)."""
+    ms = pending_messages(state)
+    for m in ms:
+        m["delivered_at"] = now()
+    if not ms:
+        return ""
+    return (f"{CONSOLE_TAG} The user wrote from the lacarta console. Treat it exactly as if they had typed it "
+            "here:\n\n" + "\n\n".join(m["text"] for m in ms))
+
+
+def withdraw_open_questions(state, why):
+    """Nobody is left to act on these answers."""
+    for q in state["questions"]:
+        if q["status"] == "open":
+            q["status"] = "superseded"
+            log(state, f"{q['id']} withdrawn: {why}", "question")
+
+
+def create_single(cwd):
+    tid = "t-" + secrets.token_hex(3)
+    d = HOME / "tasks" / tid
+    d.mkdir(parents=True)
+    name = Path(cwd).name or "Task"
+    state = {
+        "version": 1, "template": SINGLE,
+        "project": {"name": name, "summary": "", "cwd": str(cwd), "created_at": now(), "named": False},
+        "stage": "active", "agents": [], "questions": [], "decisions": [], "findings": [], "phases": [],
+        "reviews": [], "specs": {}, "plan": {}, "activity": [], "counters": {},
+    }
+    migrate(state)
+    new_agent(state, "agent", "Works on the task with you.", log_it=False)
+    log(state, f"Task started in {cwd}.", "stage")
+    write_json(d / "state.json", state)
+    with hub_edit() as hub:
+        hub["projects"][tid] = {"id": tid, "template": SINGLE, "name": name, "cwd": str(cwd),
+                                "created_at": now(), "archived": False}
+    return tid, Store(cwd, d)
+
+
+def attach_session(store, sid, cli, transcript, cwd, source=""):
+    with store.edit() as state:
+        a = get_agent(state, ORCHESTRATOR)
+        a["session"] = {"cli": cli, "id": sid, "transcript": transcript, "cwd": str(cwd),
+                        "started_at": now(), "ended_at": None}
+        a.update(status="working", updated_at=now())
+        state["attention"] = None
+        if state["template"] == SINGLE and state["stage"] == "ended":
+            state["stage"] = "active"
+            a.update(finished_at=None, summary="")
+        log(state, f"{a['name']} connected ({cli} session{', ' + source if source else ''}).", "agent")
+
+
+def register_session(payload, cli=CLI_CLAUDE):
+    """Find or create the project of a CLI session; returns (project id, store)."""
+    sid = str(payload.get("session_id") or "")
+    cwd = payload.get("cwd") or os.getcwd()
+    hub = hub_read()
+    pid = hub["sessions"].get(sid)
+    if pid in hub["projects"]:
+        return pid, project_store(pid)
+    root = find_root(None, cwd)
+    if root:
+        name = json.loads((root / STATE_DIR / "state.json").read_text())["project"]["name"]
+        pid, store = register_software(root, name), Store(root)
+    else:
+        pid, store = create_single(cwd)
+    with hub_edit() as hub:
+        hub["sessions"][sid] = pid
+        for old in list(hub["sessions"])[:-500]:
+            del hub["sessions"][old]
+    attach_session(store, sid, cli, payload.get("transcript_path"), cwd, payload.get("source", ""))
+    return pid, store
+
+
+def session_store(payload):
+    pid = hub_read()["sessions"].get(str(payload.get("session_id") or ""))
+    if pid:
+        try:
+            return project_store(pid)
+        except GateError:
+            pass
+    return register_session(payload)[1]   # hooks installed mid-session: register on first contact
+
+
+def move_session(sid, to_pid, to_store):
+    """`init` inside a registered single-agent session: the session now belongs to the new project."""
+    hub = hub_read()
+    old = hub["sessions"].get(sid)
+    if not old or old == to_pid or hub["projects"].get(old, {}).get("template") != SINGLE:
+        return
+    old_store = project_store(old)
+    with old_store.edit() as state:
+        a = get_agent(state, ORCHESTRATOR)
+        sess = dict(a.get("session") or {})
+        a.update(status="done", finished_at=now(), summary=f"Continued as the software project {to_pid}.")
+        state["stage"] = "ended"
+        state["moved_to"] = to_pid
+        withdraw_open_questions(state, "the session moved to a software project.")
+        log(state, f"The session became the software project {to_pid}.", "stage")
+    with hub_edit() as hub:
+        hub["sessions"][sid] = to_pid
+        hub["projects"][old]["archived"] = True
+    attach_session(to_store, sid, sess.get("cli", CLI_CLAUDE), sess.get("transcript"), sess.get("cwd") or to_store.root)
+
+
+# Transcripts: Claude Code appends one JSON object per line. The console shows the user's and
+# the agent's text and one line per tool call; the CLI's own plumbing is left out.
+
+_chat_cache, _chat_lock = {}, threading.Lock()
+CLI_PLUMBING = ("<command-", "<local-command", "<system-reminder", "<bash-", "<user-memory", "Caveat:")
+
+
+def transcript_allowed(path):
+    """Only session transcripts are served, whatever a state file claims."""
+    base = Path(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude").expanduser().resolve()
+    try:
+        p = Path(path).resolve()
+    except (TypeError, OSError):
+        return False
+    return p.suffix == ".jsonl" and p.is_relative_to(base) and p.is_file()
+
+
+def chat_items(line):
+    try:
+        e = json.loads(line)
+    except ValueError:
+        return []
+    if e.get("isSidechain") or e.get("isMeta") or e.get("type") not in ("user", "assistant"):
+        return []
+    content = (e.get("message") or {}).get("content")
+    blocks = [{"type": "text", "text": content}] if isinstance(content, str) else (content or [])
+    out, at, who = [], e.get("timestamp"), e["type"]
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "text":
+            text = (b.get("text") or "").strip()
+            if not text or (who == "user" and (text.startswith(CLI_PLUMBING) or CONSOLE_TAG in text)):
+                continue    # console messages are shown from the inbox, with their delivery state
+            out.append({"role": "user" if who == "user" else "agent", "text": text, "at": at})
+        elif b.get("type") == "tool_use" and who == "assistant":
+            inp = b.get("input") or {}
+            hint = next((inp[k] for k in ("description", "command", "file_path", "pattern", "url", "prompt")
+                         if isinstance(inp.get(k), str) and inp.get(k)), "")
+            out.append({"role": "tool", "name": b.get("name", ""), "text": hint[:240], "at": at})
+    return out
+
+
+def read_chat(path, limit=400):
+    if not path or not transcript_allowed(path):
+        return []
+    with _chat_lock:
+        st = os.stat(path)
+        c = _chat_cache.get(path)
+        if not c or c["ino"] != st.st_ino or c["offset"] > st.st_size:
+            c = {"ino": st.st_ino, "offset": 0, "items": []}
+        with open(path, "rb") as f:
+            f.seek(c["offset"])
+            data = f.read()
+        end = data.rfind(b"\n") + 1      # a line still being written waits for the next read
+        for line in data[:end].splitlines():
+            c["items"].extend(chat_items(line))
+        del c["items"][:-limit]
+        c["offset"] += end
+        _chat_cache[path] = c
+        return list(c["items"])
+
+
+# Hooks: `lacarta.py hook <event>` with the CLI's JSON on stdin. A hook never fails the session:
+# errors go to ~/.lacarta/hooks.log and the hook exits 0.
+
+def hook_print(event, context=None, block=None):
+    if block:
+        print(json.dumps({"decision": "block", "reason": block}))
+    elif context:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": context}}))
+
+
+def session_context(pid, store):
+    state = store.read()
+    info = daemon_info()
+    url = info["open_url"] if info else "not running (start it with `serve`)"
+    L = f"python3 {Path(__file__).resolve()}"
+    kind = KINDS[state["template"]]["label"].lower()
+    lines = [f"lacarta: this session is registered in the lacarta console ({url}) as the {kind} project "
+             f"\"{state['project']['name']}\" ({pid}). The user can follow it there and write to you from it: "
+             f"those messages start with \"{CONSOLE_TAG}\" and are the user's own words."]
+    if state["template"] == SOFTWARE:
+        lines.append(f"This folder is a lacarta software project: load the `lacarta` skill now and follow it. "
+                     f"Run `{L} status` first.")
+    else:
+        lines.append("If the user asks to build a new project, app or service, or wants specs or a structured, "
+                     "reviewed process, load the `lacarta` skill. When you need a decision while the user may be "
+                     f"away from the terminal, ask in the console: `{L} ask --title \"...\" --option "
+                     f"\"Label|what it means\"`, then run `{L} wait` as a background command.")
+    qs = [q["id"] for q in state["questions"] if q["status"] == "open"]
+    if qs:
+        lines.append(f"Questions still open in the console: {', '.join(qs)}.")
+    return "\n".join(lines)
+
+
+def hook_session_start(payload):
+    ensure_daemon()
+    pid, store = register_session(payload)
+    env = os.environ.get("CLAUDE_ENV_FILE")
+    if env:     # later Bash commands in this session resolve the project without a .lacarta/ folder
+        with open(env, "a") as f:
+            f.write(f"export LACARTA_PROJECT={shlex.quote(pid)}\n"
+                    f"export LACARTA_SESSION={shlex.quote(str(payload.get('session_id') or ''))}\n")
+    hook_print("SessionStart", session_context(pid, store))
+
+
+def hook_prompt(payload):
+    with session_store(payload).edit() as state:
+        state["attention"] = None
+        get_agent(state, ORCHESTRATOR).update(status="working", updated_at=now())
+        prompt = str(payload.get("prompt") or "").strip()
+        if state["template"] == SINGLE and not state["project"].get("named") and prompt \
+                and not prompt.startswith("/"):
+            first = prompt.splitlines()[0]
+            state["project"].update(name=first[:70] + ("…" if len(first) > 70 else ""), named=True)
+
+
+def hook_post_tool(payload):
+    store = session_store(payload)
+    state = store.read()
+    if not (pending_messages(state) or state.get("attention")):
+        return
+    with store.edit() as state:
+        state["attention"] = None
+        msg = take_messages(state)
+    hook_print("PostToolUse", msg)
+
+
+def hook_notification(payload):
+    with session_store(payload).edit() as state:
+        text = str(payload.get("message") or "The agent needs you in the terminal.")
+        state["attention"] = {"text": text, "at": now()}
+        log(state, f"Needs you in the terminal: {text}", "agent")
+
+
+def hook_stop(payload):
+    """End of a turn: deliver console messages, or keep listening for one (remote control)."""
+    store = session_store(payload)
+    with store.edit() as state:
+        state["attention"] = None
+        a = get_agent(state, ORCHESTRATOR)
+        msg = take_messages(state)
+        listen = not msg and remote_on(state) and state["stage"] not in ("ended", "done")
+        a.update(status="working" if msg else "idle", updated_at=now())
+        if listen:
+            state["listening"] = {"since": now(), "pid": os.getpid()}
+        answered = {q["id"] for q in state["questions"] if q["status"] != "open"}
+        threads = {q["id"]: len(q.get("thread") or []) for q in state["questions"]}
+    if msg or not listen:
+        return hook_print("Stop", block=msg or None)
+    reason, deadline = None, time.time() + LISTEN_MAX
+    try:
+        while time.time() < deadline and not reason:
+            time.sleep(1)
+            state = store.read()
+            if not remote_on(state):
+                break
+            if pending_messages(state):
+                with store.edit() as state:
+                    reason = take_messages(state)
+                break
+            news = []
+            for q in state["questions"]:
+                if q["id"] not in answered and q["status"] == "answered":
+                    news.append(f"{q['id']} ({q['title']}) was answered: " + json.dumps(q["answer"]))
+                elif discussing(q) and len(q["thread"]) > threads.get(q["id"], 0):
+                    news.append(f"On {q['id']} ({q['title']}) the user chose \"Talk about this\" and wrote: "
+                                f"{q['thread'][-1]['text']}\nReply with `reply {q['id']} --message ...`; "
+                                "it is not answered.")
+            if news:
+                reason = (f"{CONSOLE_TAG} Activity in the lacarta console (a background `wait` may report the "
+                          "same thing; it is the same event):\n\n" + "\n\n".join(news))
+    finally:
+        with store.edit() as state:
+            state["listening"] = None
+            if reason:
+                get_agent(state, ORCHESTRATOR).update(status="working", updated_at=now())
+    hook_print("Stop", block=reason)
+
+
+def hook_session_end(payload):
+    with session_store(payload).edit() as state:
+        a = get_agent(state, ORCHESTRATOR)
+        if a.get("session"):
+            a["session"]["ended_at"] = now()
+        state.update(listening=None, attention=None)
+        if state["template"] == SINGLE:
+            state["stage"] = "ended"
+            a.update(status="done", finished_at=now(), updated_at=now())
+            withdraw_open_questions(state, "the session ended.")
+        else:
+            a.update(status="idle", updated_at=now())
+        log(state, f"{a['name']}'s session ended ({payload.get('reason') or 'exit'}).", "agent")
+
+
+HOOKS = {"session-start": hook_session_start, "prompt": hook_prompt, "post-tool": hook_post_tool,
+         "notification": hook_notification, "stop": hook_stop, "session-end": hook_session_end}
+# Claude Code event: (our hook name, timeout in seconds, matcher)
+CLAUDE_EVENTS = {
+    "SessionStart": ("session-start", 30, None), "UserPromptSubmit": ("prompt", 15, None),
+    "PostToolUse": ("post-tool", 15, "*"), "Notification": ("notification", 15, None),
+    "Stop": ("stop", 86400, None), "SessionEnd": ("session-end", 15, None),
+}
+HOOK_MARK = "lacarta.py hook"
+
+
+def cmd_hook(args):
+    global ACTOR
+    ACTOR = ORCHESTRATOR
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        payload = {}
+    # Esc in the CLI terminates a listening Stop hook: unwind so it stops showing as listening.
+    signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
+    try:
+        HOOKS[args.event](payload)
+    except Exception:
+        with contextlib.suppress(OSError):
+            HOME.mkdir(parents=True, exist_ok=True)
+            with open(HOME / "hooks.log", "a") as f:
+                f.write(f"{now()} {args.event}\n{traceback.format_exc()}\n")
+    sys.exit(0)
+
+
+def cmd_install(args):
+    path = Path(args.settings or "~/.claude/settings.json").expanduser()
+    cfg = json.loads(path.read_text()) if path.exists() and path.read_text().strip() else {}
+    hooks = cfg.setdefault("hooks", {})
+    base = f"python3 {shlex.quote(str(Path(__file__).resolve()))} hook"
+    for event, (name, timeout, matcher) in CLAUDE_EVENTS.items():
+        groups = [g for g in hooks.get(event, [])
+                  if not any(HOOK_MARK in h.get("command", "") for h in g.get("hooks", []))]
+        if not args.uninstall:
+            g = {"hooks": [{"type": "command", "command": f"{base} {name}", "timeout": timeout}]}
+            if matcher:
+                g["matcher"] = matcher
+            groups.append(g)
+        if groups:
+            hooks[event] = groups
+        else:
+            hooks.pop(event, None)
+    if not hooks:
+        cfg.pop("hooks")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.with_name(path.name + ".bak").write_text(path.read_text())
+    path.write_text(json.dumps(cfg, indent=2) + "\n")
+    if args.uninstall:
+        print(f"Removed the lacarta hooks from {path} (backup: {path.name}.bak).")
+        return
+    print(f"Installed the lacarta hooks in {path} (backup: {path.name}.bak). New Claude Code sessions "
+          "register in the console; restart running sessions to include them.")
+    skill = path.parent / "skills" / "lacarta"
+    if not skill.exists():
+        print(f"The skill itself is not in {skill.parent}: `ln -s {SKILL_DIR} {skill}` so sessions can load it.")
+
+
+# The daemon: one per machine, started by the first session that needs it.
+
+def daemon_info():
+    f = HOME / "daemon.json"
+    try:
+        info = json.loads(f.read_text())
+    except (OSError, ValueError):
+        return None
+    return info if pid_alive(info.get("pid")) else None
+
+
+def ensure_daemon():
+    info = daemon_info()
+    if info:
+        return info
+    HOME.mkdir(parents=True, exist_ok=True)
+    with open(HOME / "daemon.log", "a") as log_file:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve"], cwd=str(HOME),
+                         stdin=subprocess.DEVNULL, stdout=log_file, stderr=log_file, start_new_session=True)
+    for _ in range(50):
+        time.sleep(0.1)
+        info = daemon_info()
+        if info:
+            return info
+    return None
 
 
 # ---------------------------------------------------------------- commands
@@ -617,7 +1178,7 @@ def cmd_init(args):
         target = d / "specs" / f"{k}.md"
         if not target.exists():
             target.write_text((TEMPLATES / f"{k}.md").read_text().replace("{{PROJECT}}", args.name))
-    (d / ".gitignore").write_text(".lock\nstate.tmp\nserver.json\n")
+    (d / ".gitignore").write_text(".lock\nstate.tmp\n")
     state = {
         "version": 1,
         "project": {"name": args.name, "summary": args.summary or "", "created_at": now()},
@@ -626,20 +1187,19 @@ def cmd_init(args):
                       "approved_revision": None} for k, v in SPECS.items()},
         "plan": {"status": "draft", "approved_at": None},
         "phases": [], "reviews": [], "questions": [], "decisions": [], "findings": [],
-        "activity": [], "counters": {}, "models": default_models(confirmed=False),
+        "activity": [], "counters": {}, "template": SOFTWARE,
     }
     migrate(state)  # registers the orchestrator
     log(state, f"Project {args.name} initialised.", "stage")
-    table = "\n".join(f"| {v[0]} | {MODELS[v[3]]['name']} |" for v in ROLES.values())
-    q = add_question(
-        state, "validation", "Choose the models for this project",
-        "Each part of the framework runs on its own model. Defaults:\n\n| Role | Model |\n| --- | --- |\n"
-        f"{table}\n\nChange them under [Models](#models), then confirm there or here. "
-        "You can change them again at any time; agents read the current choice before each spawn.",
-        [USE_MODELS], {"type": "models-confirm"}, {"stage": "specification"}, allow_free=False)
     (d / "state.json").write_text(json.dumps(state, indent=2) + "\n")
-    print(f"Initialised {d}\nSpec templates: {d / 'specs'}\n"
-          f"Next: start the console with `serve`, then `wait {q['id']}` while the user sets the models.")
+    pid = register_software(root, args.name)
+    sid = os.environ.get("LACARTA_SESSION")
+    if sid:
+        move_session(sid, pid, Store(root))
+    info = ensure_daemon()
+    print(f"Initialised {d} as project {pid}\nSpec templates: {d / 'specs'}\n"
+          f"Console: {info['open_url'] if info else 'not running; start it with `serve`'}\n"
+          "Next: tell the user the console URL, then ask what the project is (unless they already said).")
 
 
 def cmd_status(args, store):
@@ -648,6 +1208,13 @@ def cmd_status(args, store):
         print(json.dumps({**state, "derived": derived(state, store)}, indent=2))
         return
     d = derived(state, store)
+    if state["template"] == SINGLE:
+        print(f"{state['project']['name']}: single-agent task in {state['project'].get('cwd')}, {state['stage']}")
+        print(f"Remote control: {'on' if d['remote'] else 'off'}; console messages waiting: {d['pending_messages']}")
+        for q in [q for q in state["questions"] if q["status"] == "open"]:
+            print(f"  {q['id']} [{q['kind']}] {q['title']}")
+        print(f"\nNext: {d['next']}")
+        return
     print(f"{state['project']['name']}: stage {state['stage']}")
     if d["blocked"]:
         print(f"BLOCKED: {d['blocked']}")
@@ -748,7 +1315,6 @@ def cmd_plan_reopen(args, store):
 
 def cmd_phase_start(args, store):
     with store.edit() as state:
-        require_models(state)
         reason = blocked_reason(state)
         if reason:
             raise GateError(f"Blocked. {reason}")
@@ -808,7 +1374,6 @@ def cmd_review_add(args, store):
         raise GateError("The specification review is `--phase spec --type specification`; "
                         "phases and the final review take functional and security reviews.")
     with store.edit() as state:
-        require_models(state)
         extra = {}
         if pid == "spec":
             if state["stage"] != "specification":
@@ -1003,28 +1568,37 @@ def cmd_wait(args, store):
 
 
 def cmd_models(args, store):
+    """Models are machine-wide, per kind of project; this shows the current project's kind."""
+    kind = store.read()["template"] if store else SOFTWARE
     if args.set:
         roles = {}
         for item in args.set:
             role, _, model = item.partition("=")
             roles[role.strip()] = model.strip()
-        with store.edit() as state:
-            set_models(state, roles, by="user (terminal)")
-    state = store.read()
-    m = state["models"]
+        settings_update({kind: roles})
+    models = settings_read()["models"][kind]
+    roles = KINDS[kind]["roles"]
     if args.json:
-        print(json.dumps({r: {"model": a, **MODELS[a]} for r, a in m["roles"].items()}
-                         | {"confirmed": m["confirmed"]}, indent=2))
+        print(json.dumps({r: {"model": a, **MODELS[a]} for r, a in models.items()}, indent=2))
         return
-    print(f"Models ({'confirmed' if m['confirmed'] else 'NOT confirmed yet'}):")
-    for r, a in m["roles"].items():
-        print(f"  {r:<24} {a:<7} {MODELS[a]['name']:<11} {ROLES[r][0]}")
+    print(f"Models for {KINDS[kind]['label'].lower()} projects (console Settings page):")
+    for r, a in models.items():
+        print(f"  {r:<24} {a:<7} {MODELS[a]['name']:<11} {roles[r][0]}")
     print("\nPass the alias (second column) as the Agent tool's `model` when you spawn that role. "
-          "The orchestrator is this session: if it runs another model, ask the user to `/model <alias>`.")
+          "The session itself runs the first role's model: if it differs, ask the user to `/model <alias>`.")
+
+
+def cmd_inbox(args, store):
+    """For CLIs without hooks: read (and mark delivered) the messages the user sent from the console."""
+    with store.edit() as state:
+        msg = take_messages(state)
+    print(msg or "No new messages from the console.")
 
 
 def cmd_agent_start(args, store):
     with store.edit() as state:
+        if state["template"] != SOFTWARE:
+            raise GateError("A single-agent task has one agent; helpers you spawn are not tracked.")
         if args.role == "orchestrator":
             raise GateError("The orchestrator is A-1 and always exists.")
         a = new_agent(state, args.role, args.task, parse_pid(args.phase) if args.phase else None)
@@ -1175,10 +1749,57 @@ def url_host(host):
     return f"[{host}]" if ":" in host else host
 
 
-def make_handler(store, token, port, extra_hosts=(), require_key=False, check_host=True):
+def catalog():
+    return {"models": MODELS, "planned": PLANNED_KINDS,
+            "kinds": {k: {"label": v["label"], "about": v["about"],
+                          "roles": {r: {"label": x[0], "stage": x[1], "about": x[2], "default": x[3]}
+                                    for r, x in v["roles"].items()}} for k, v in KINDS.items()}}
+
+
+def project_summary(pid, entry):
+    """What the home page and the notifications need, cheap enough to compute for every project."""
+    base = {"id": pid, "template": entry["template"], "name": entry.get("name", pid),
+            "where": entry.get("root") or entry.get("cwd"), "archived": entry.get("archived", False)}
+    try:
+        state = project_store(pid).read()
+    except (OSError, ValueError, GateError) as e:
+        return {**base, "error": f"State unreadable: {e}"}
+    a = get_agent(state, ORCHESTRATOR)
+    names = {x["id"]: x["name"] for x in state["agents"]}
+    qs = [{"id": q["id"], "title": q["title"], "asked_by": names.get(q.get("asked_by", ORCHESTRATOR), ""),
+           "triage": (q.get("effect") or {}).get("type") == "finding-triage",
+           "replies": sum(m["by"] != "user" for m in q.get("thread") or [])}
+          for q in state["questions"] if q["status"] == "open"]
+    return {**base, "name": state["project"]["name"], "stage": state["stage"],
+            "status": agent_status(state, a), "agent": {k: a.get(k) for k in ("id", "name", "avatar")},
+            "session": bool(a.get("session")) and not a["session"].get("ended_at"),
+            "questions": qs, "attention": state.get("attention"), "listening": listening(state),
+            "listening_since": (state.get("listening") or {}).get("since") if listening(state) else None,
+            "blocked": blocked_reason(state) if state["template"] == SOFTWARE else None,
+            "updated_at": state["activity"][-1]["at"] if state["activity"] else state["project"]["created_at"],
+            "moved_to": state.get("moved_to")}
+
+
+def project_payload(pid):
+    store = project_store(pid)
+    state = store.read()
+    out = {"id": pid, "state": state, "derived": derived(state, store)}
+    if state["template"] == SOFTWARE:
+        out["specs"] = {k: (store.dir / "specs" / f"{k}.md").read_text() for k in SPECS}
+        out["reports"] = {}
+        for r in state["reviews"]:
+            p = (store.root / r["report"]).resolve()
+            if p.is_relative_to(store.dir.resolve()) and p.exists():
+                out["reports"][r["id"]] = p.read_text()
+    sess = get_agent(state, ORCHESTRATOR).get("session") or {}
+    out["chat"] = read_chat(sess.get("transcript"))
+    return out
+
+
+def make_handler(token, port, extra_hosts=(), require_key=False, check_host=True):
     """Build the request handler.
 
-    On loopback the page is open and only answers need the token. Bound to any other
+    On loopback the page is open and only changes need the token. Bound to any other
     address, every request but the vendored scripts needs the token too (from `?key=` on
     the page URL, then the X-Lacarta-Token header), since anyone on the network can reach it.
     """
@@ -1208,18 +1829,28 @@ def make_handler(store, token, port, extra_hosts=(), require_key=False, check_ho
             self.end_headers()
             self.wfile.write(data)
 
+        def _error(self, code, text):
+            self._send(code, json.dumps({"error": text}))
+
         def _host_ok(self):
             # Refuse DNS rebinding: only the host names we were started for are served.
             if check_host and self.headers.get("Host") not in allowed_hosts:
-                self._send(403, json.dumps({"error": "Host not allowed. Add it with `serve --allow-host`."}))
+                self._error(403, "Host not allowed. Add it with `serve --allow-host`.")
                 return False
             return True
 
         def _key_ok(self, presented):
             if require_key and not secrets.compare_digest(presented or "", token):
-                self._send(403, json.dumps({"error": "Missing or wrong key. Open the URL `serve` printed."}))
+                self._error(403, "Missing or wrong key. Open the URL `serve` printed.")
                 return False
             return True
+
+        def _project(self, path, action):
+            """/api/p/<id>/<action> -> project id, or None."""
+            parts = path.split("/")
+            if len(parts) == 5 and parts[:3] == ["", "api", "p"] and parts[4] == action:
+                return parts[3] if parts[3] in hub_read()["projects"] else None
+            return None
 
         def do_GET(self):
             if not self._host_ok():
@@ -1232,70 +1863,82 @@ def make_handler(store, token, port, extra_hosts=(), require_key=False, check_ho
                     return
                 html = (UI_DIR / "index.html").read_text().replace("__LACARTA_TOKEN__", token)
                 return self._send(200, html, "text/html")
-            if path == "/api/state":
-                if not self._key_ok(self.headers.get("X-Lacarta-Token")):
-                    return
-                state = store.read()
-                specs = {k: (store.dir / "specs" / f"{k}.md").read_text() for k in SPECS}
-                reports = {}
-                for r in state["reviews"]:
-                    p = (store.root / r["report"]).resolve()
-                    if p.is_relative_to(store.dir.resolve()) and p.exists():
-                        reports[r["id"]] = p.read_text()
-                catalog = {"models": MODELS, "roles": {r: {"label": v[0], "stage": v[1], "about": v[2],
-                                                            "default": v[3]} for r, v in ROLES.items()}}
-                return self._send(200, json.dumps({"state": state, "derived": derived(state, store),
-                                                   "specs": specs, "reports": reports, "catalog": catalog}))
-            self._send(404, json.dumps({"error": "Not found."}))
+            if not self._key_ok(self.headers.get("X-Lacarta-Token")):
+                return
+            if path == "/api/hub":
+                hub = hub_read()
+                return self._send(200, json.dumps({
+                    "projects": [project_summary(pid, e) for pid, e in hub["projects"].items()],
+                    "settings": settings_read(), "catalog": catalog()}))
+            pid = self._project(path, "state")
+            if pid:
+                try:
+                    return self._send(200, json.dumps(project_payload(pid)))
+                except (OSError, ValueError, GateError) as e:
+                    return self._error(500, f"Cannot read this project: {e}")
+            self._error(404, "Not found.")
 
         def do_POST(self):
             if not self._host_ok():
                 return
-            # Answers must come from the console page itself (same origin as the Host served).
+            # Changes must come from the console page itself (same origin as the Host served).
             if self.headers.get("Origin") != f"http://{self.headers.get('Host')}":
-                return self._send(403, json.dumps({"error": "Origin not allowed."}))
+                return self._error(403, "Origin not allowed.")
             if not secrets.compare_digest(self.headers.get("X-Lacarta-Token", ""), token):
-                return self._send(403, json.dumps({"error": "Missing or wrong token. Reload the page."}))
+                return self._error(403, "Missing or wrong token. Reload the page.")
             if not self.headers.get("Content-Type", "").startswith("application/json"):
-                return self._send(415, json.dumps({"error": "JSON only."}))
-            if self.path not in ("/api/answer", "/api/models", "/api/discuss"):
-                return self._send(404, json.dumps({"error": "Not found."}))
+                return self._error(415, "JSON only.")
             length = int(self.headers.get("Content-Length", 0))
             if length > 64_000:
-                return self._send(413, json.dumps({"error": "Answer too long."}))
+                return self._error(413, "Too long.")
             try:
                 body = json.loads(self.rfile.read(length))
-                if self.path == "/api/models":
-                    with store.edit() as state:
-                        roles = body.get("roles") or {}
-                        if not isinstance(roles, dict):
-                            raise ValueError
-                        set_models(state, {str(k): str(v) for k, v in roles.items()}, by="user")
-                        if body.get("confirm") and not state["models"]["confirmed"]:
-                            q = open_question(state, {"type": "models-confirm"})
-                            if q:
-                                answer_question(state, q["id"], USE_MODELS)
-                            else:
-                                state["models"]["confirmed"] = True
-                    return self._send(200, json.dumps({"ok": True, "models": state["models"]}))
-                if self.path == "/api/discuss":
-                    with store.edit() as state:
-                        q = discuss_question(state, str(body.get("id", "")), str(body.get("message", ""))[:20_000])
-                    return self._send(200, json.dumps({"ok": True, "question": q}))
-                with store.edit() as state:
-                    q = answer_question(state, str(body.get("id", "")), str(body.get("choice", "")),
-                                        str(body.get("comment", ""))[:20_000])
-                self._send(200, json.dumps({"ok": True, "question": q}))
+                if self.path == "/api/settings":
+                    models = body.get("models")
+                    if models is not None and not isinstance(models, dict):
+                        raise ValueError
+                    s = settings_update({str(k): {str(r): str(m) for r, m in v.items()}
+                                         for k, v in (models or {}).items()}, body.get("remote_control"))
+                    return self._send(200, json.dumps({"ok": True, "settings": s}))
+                for action in ("answer", "discuss", "message", "remote", "archive"):
+                    pid = self._project(self.path, action)
+                    if pid:
+                        break
+                else:
+                    return self._error(404, "Not found.")
+                if action == "archive":
+                    with hub_edit() as hub:
+                        hub["projects"][pid]["archived"] = bool(body.get("archived"))
+                    return self._send(200, json.dumps({"ok": True}))
+                with project_store(pid).edit() as state:
+                    text = str(body.get("message", ""))[:20_000]
+                    if action == "answer":
+                        out = answer_question(state, str(body.get("id", "")), str(body.get("choice", "")),
+                                              str(body.get("comment", ""))[:20_000])
+                    elif action == "discuss":
+                        out = discuss_question(state, str(body.get("id", "")), text)
+                    elif action == "message":
+                        out = add_message(state, text)
+                    else:
+                        on = body.get("on")
+                        state["remote"] = None if on is None else bool(on)
+                        log(state, f"Remote control {'on' if remote_on(state) else 'off'}.", "chat")
+                        out = {"remote": remote_on(state)}
+                self._send(200, json.dumps({"ok": True, "result": out}))
             except GateError as e:
-                self._send(409, json.dumps({"error": str(e)}))
-            except (ValueError, KeyError):
-                self._send(400, json.dumps({"error": "Malformed request."}))
+                self._error(409, str(e))
+            except (ValueError, KeyError, AttributeError, TypeError):
+                self._error(400, "Malformed request.")
 
     return Handler
 
 
-def cmd_serve(args, store):
+def cmd_serve(args, store=None):
     global ACTOR
+    info = daemon_info()
+    if info:
+        print(f"lacarta console already running: {info['open_url']}")
+        return
     ACTOR = None
     token = secrets.token_urlsafe(24)
     host = args.host
@@ -1305,18 +1948,22 @@ def cmd_serve(args, store):
     # A wildcard bind answers on every interface, so the Host check needs the names to expect;
     # without them the key alone guards the console.
     check_host = not wildcard or bool(args.allow_host)
-    handler = make_handler(store, token, args.port, extra, require_key=exposed, check_host=check_host)
+    handler = make_handler(token, args.port, extra, require_key=exposed, check_host=check_host)
 
     class Server(http.server.ThreadingHTTPServer):
         address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
+        daemon_threads = True
 
     srv = Server((host, args.port), handler)
     shown = "<this-machine's-address>" if wildcard and not args.allow_host else \
         url_host(sorted(args.allow_host)[0] if wildcard else host)
-    url = f"http://{shown}:{args.port}/" + (f"?key={token}" if exposed else "")
-    (store.dir / "server.json").write_text(json.dumps({"url": url.split("?")[0], "pid": os.getpid(),
-                                                        "started_at": now()}))
-    print(f"lacarta console: {url}", flush=True)
+    url = f"http://{shown}:{args.port}/"
+    open_url = url + (f"?key={token}" if exposed else "")
+    HOME.mkdir(parents=True, exist_ok=True)
+    f = HOME / "daemon.json"
+    f.write_text(json.dumps({"url": url, "open_url": open_url, "pid": os.getpid(), "started_at": now()}))
+    f.chmod(0o600)      # it can hold the key
+    print(f"lacarta console: {open_url}", flush=True)
     if exposed:
         print("Reachable from the network. Keep the key private: anyone holding the URL can answer "
               "for you. Traffic is plain HTTP; prefer a trusted network or an SSH tunnel.", flush=True)
@@ -1325,7 +1972,9 @@ def cmd_serve(args, store):
     except KeyboardInterrupt:
         pass
     finally:
-        (store.dir / "server.json").unlink(missing_ok=True)
+        with contextlib.suppress(OSError, ValueError):
+            if json.loads(f.read_text()).get("pid") == os.getpid():
+                f.unlink()
 
 
 # --------------------------------------------------------------------- cli
@@ -1333,7 +1982,9 @@ def cmd_serve(args, store):
 def build_parser():
     ap = argparse.ArgumentParser(prog="lacarta", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root", help="Project root (default: nearest folder with .lacarta/).")
+    ap.add_argument("--root", help="Software project root (default: nearest folder with .lacarta/).")
+    ap.add_argument("--project", help="Project id from the console (default: the folder's .lacarta/, else "
+                                      "$LACARTA_PROJECT, which a registered session sets).")
     ap.add_argument("--agent", help="Your agent id from `agent start` (default: $LACARTA_AGENT, else the "
                                     "orchestrator A-1). Goes before the command: `lacarta.py --agent A-3 ask ...`.")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1345,12 +1996,22 @@ def build_parser():
     p = sub.add_parser("status", help="Stage, gates, open items and the next expected action.")
     p.add_argument("--json", action="store_true")
 
-    p = sub.add_parser("serve", help="Run the web console (loopback by default).")
+    p = sub.add_parser("serve", help="Run the console for every project on this machine (loopback by default). "
+                                     "Sessions start it on their own; this prints its URL if it already runs.")
     p.add_argument("--port", type=int, default=4747)
     p.add_argument("--host", default="127.0.0.1",
                    help="Address to bind. Anything but loopback requires the key printed in the URL.")
     p.add_argument("--allow-host", action="append",
                    help="Extra host name or IP the browser will use (LAN name, VPN IP); repeat.")
+
+    p = sub.add_parser("install", help="Add the hooks that register every Claude Code session in the console.")
+    p.add_argument("--settings", help="Claude Code settings file (default: ~/.claude/settings.json).")
+    p.add_argument("--uninstall", action="store_true", help="Remove the hooks instead.")
+
+    p = sub.add_parser("hook", help="Called by the CLI's hooks, with its JSON on stdin.")
+    p.add_argument("event", choices=list(HOOKS))
+
+    sub.add_parser("inbox", help="Read the messages the user sent from the console (CLIs without hooks).")
 
     spec = sub.add_parser("spec").add_subparsers(dest="sub", required=True)
     p = spec.add_parser("submit", help="Ask the user to approve one spec.")
@@ -1452,7 +2113,8 @@ def build_parser():
     p.add_argument("--name", required=True)
     ag.add_parser("list", help="All agents with their status.")
 
-    p = sub.add_parser("models", help="Show the model for each role (read it before every spawn).")
+    p = sub.add_parser("models", help="Show the model for each role of this kind of project "
+                                      "(read it before every spawn).")
     p.add_argument("--json", action="store_true")
     p.add_argument("--set", action="append", metavar="ROLE=MODEL",
                    help=f"Change a role's model as the user asked in the terminal. Models: {', '.join(MODELS)}.")
@@ -1479,7 +2141,7 @@ COMMANDS = {
     ("review", "add"): cmd_review_add, ("finding", "add"): cmd_finding_add,
     ("finding", "resolve"): cmd_finding_resolve, ("ask", None): cmd_ask, ("wait", None): cmd_wait,
     ("reply", None): cmd_reply, ("answer", None): cmd_answer, ("decide", None): cmd_decide, ("decisions", None): cmd_decisions,
-    ("models", None): cmd_models,
+    ("models", None): cmd_models, ("inbox", None): cmd_inbox,
     ("agent", "start"): cmd_agent_start, ("agent", "update"): cmd_agent_update,
     ("agent", "done"): cmd_agent_done, ("agent", "rename"): cmd_agent_rename,
     ("agent", "list"): cmd_agent_list,
@@ -1488,17 +2150,44 @@ COMMANDS = {
 }
 
 
+SOFTWARE_ONLY = {"spec", "plan", "phase", "review", "finding", "final"}
+
+
+def resolve_store(args):
+    if args.root:
+        return Store(find_root(args.root))
+    if args.project:
+        return project_store(args.project)
+    root = find_root()
+    if root:
+        # A project from before the console was machine-wide joins it on first use.
+        if not any(p.get("root") == str(root) for p in hub_read()["projects"].values()):
+            register_software(root, json.loads((root / STATE_DIR / "state.json").read_text())["project"]["name"])
+        return Store(root)
+    if os.environ.get("LACARTA_PROJECT"):
+        return project_store(os.environ["LACARTA_PROJECT"])
+    return None
+
+
 def main(argv=None):
     global ACTOR
     args = build_parser().parse_args(argv)
     ACTOR = args.agent or os.environ.get("LACARTA_AGENT") or ORCHESTRATOR
     try:
-        if args.cmd == "init":
-            return cmd_init(args)
-        root = find_root(args.root)
-        if not root or not (root / STATE_DIR / "state.json").exists():
-            raise GateError("No .lacarta/ found here or above. Run `init` in the project root first.")
-        COMMANDS[(args.cmd, getattr(args, "sub", None))](args, Store(root))
+        if args.cmd == "hook":
+            return cmd_hook(args)
+        if args.cmd in ("init", "install", "serve"):
+            return {"init": cmd_init, "install": cmd_install, "serve": cmd_serve}[args.cmd](args)
+        store = resolve_store(args)
+        if args.cmd == "models":
+            return cmd_models(args, store)
+        if not store or not store.path.exists():
+            raise GateError("No project here. `init` creates a software project in this folder; sessions "
+                            "register on their own once `install` has added the hooks.")
+        if args.cmd in SOFTWARE_ONLY and store.read()["template"] != SOFTWARE:
+            raise GateError(f"`{args.cmd}` belongs to software projects; this is a single-agent task. "
+                            "Run `init` to turn this folder into a software project.")
+        COMMANDS[(args.cmd, getattr(args, "sub", None))](args, store)
     except GateError as e:
         print(f"Refused: {e}", file=sys.stderr)
         sys.exit(2)
