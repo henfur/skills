@@ -89,6 +89,36 @@ TRIAGE_REDESIGN = "Change the spec or design"
 TRIAGE_ACCEPT = "Accept the risk"
 TRIAGE_STOP = "Stop the project"
 
+# What each fixed choice does, shown under the option in the console.
+APPROVAL_HELP = {
+    APPROVE: "Accept it as it is. The framework moves on to the next step.",
+    REQUEST_CHANGES: "Send it back. Say what should change in the comment; the agent revises it and asks again.",
+}
+TRIAGE_HELP = {
+    TRIAGE_FIX: "It is a bug in the code. The agent fixes only this finding, adds a test that proves the fix, "
+                "and a fresh review checks it. The specs stay as they are. Work resumes once the fix is verified.",
+    TRIAGE_REDESIGN: "Patching the code is not enough: the weakness comes from what was specified or designed. "
+                     "The agent first updates the specs (asking you any choice that needs), then fixes the code, "
+                     "and a fresh review checks it.",
+    TRIAGE_ACCEPT: "Leave it unfixed and carry on. Your reason is recorded in the decision log and in the accepted "
+                   "risks of the security spec, where the final reviewers will see it. A written reason is required.",
+    TRIAGE_STOP: "Freeze the project as it is now. Nothing advances any more. Pick this when the finding puts "
+                 "the whole approach in question.",
+}
+# What a severity means, per review type, so a triage question can be judged on its own.
+SEVERITY_MEANING = {
+    "security": {
+        "critical": "exploitable remotely with no or trivial preconditions; full compromise, code execution, "
+                    "broad data exposure or leaked production secrets.",
+        "high": "serious impact with a realistic precondition (an authenticated user, a specific configuration): "
+                "authorisation bypass, injection, account takeover, sensitive data exposure.",
+    },
+    "functional": {
+        "critical": "data loss or corruption, or the phase's core goal does not work at all.",
+        "high": "a must requirement is unmet or wrong in a common case.",
+    },
+}
+
 
 class GateError(Exception):
     """A framework rule refuses the requested transition."""
@@ -352,7 +382,11 @@ def next_action(state, store):
     stage = state["stage"]
     if stage == "stopped":
         return "The project is stopped. Nothing advances until the user restarts it."
-    triage = [q for q in state["questions"]
+    talk = [q for q in state["questions"] if discussing(q)]
+    if talk:
+        return (f"The user wants to talk about {talk[0]['id']} before answering: read the thread and "
+                f"`reply {talk[0]['id']} --message ...`, then `wait` again. The question stays open.")
+    triage =[q for q in state["questions"]
               if q["status"] == "open" and (q.get("effect") or {}).get("type") == "finding-triage"]
     if triage:
         return f"Blocked: wait for the user's decision on {triage[0]['id']} (`wait {triage[0]['id']}`). Do not write code."
@@ -436,26 +470,66 @@ def derived(state, store):
 
 # --------------------------------------------------------------- questions
 
-def add_question(state, kind, title, body="", options=None, effect=None, context=None, allow_free=True):
+def add_question(state, kind, title, body="", options=None, effect=None, context=None, allow_free=True,
+                 option_help=None):
     if effect:
         existing = open_question(state, effect)
         if existing:
             return existing
     q = {
         "id": next_id(state, "Q"), "kind": kind, "title": title, "body": body,
-        "options": options or [], "allow_free": allow_free, "context": context or {},
-        "effect": effect, "status": "open", "asked_at": now(), "answer": None,
-        "asked_by": actor(state) or ORCHESTRATOR,
+        "options": options or [], "option_help": option_help or {}, "allow_free": allow_free,
+        "context": context or {}, "effect": effect, "status": "open", "asked_at": now(), "answer": None,
+        "asked_by": actor(state) or ORCHESTRATOR, "thread": [],
     }
     state["questions"].append(q)
     log(state, f"{q['id']} asked: {title}", "question")
     return q
 
 
-def answer_question(state, qid, choice, comment="", by="user"):
+def get_question(state, qid):
     q = next((q for q in state["questions"] if q["id"] == qid), None)
     if not q:
         raise GateError(f"No question {qid}.")
+    return q
+
+
+def parse_options(values):
+    """`--option "Label|What it means"` values -> (labels, {label: help})."""
+    labels, helps = [], {}
+    for v in values or []:
+        label, _, text = v.partition("|")
+        label = label.strip()
+        if not label:
+            raise GateError(f"Empty option label in {v!r}.")
+        labels.append(label)
+        if text.strip():
+            helps[label] = text.strip()
+    return labels, helps
+
+
+# "Talk about this": the user can discuss an open question with the agent before answering it.
+# The question stays open; the agent owes a reply while the user spoke last.
+
+def discussing(q):
+    thread = q.get("thread") or []
+    return q["status"] == "open" and bool(thread) and thread[-1]["by"] == "user"
+
+
+def discuss_question(state, qid, text):
+    q = get_question(state, qid)
+    if q["status"] != "open":
+        raise GateError(f"{qid} is already answered.")
+    text = (text or "").strip()
+    if not text:
+        raise GateError("Write a message.")
+    q.setdefault("thread", []).append({"by": "user", "text": text, "at": now()})
+    log(state, f"{qid}: you asked the agent about it.", "question")
+    return q
+
+
+def answer_question(state, qid, choice, comment="", by="user"):
+    q = get_question(state, qid)
     if q["status"] != "open":
         raise GateError(f"{qid} is already answered.")
     choice = (choice or "").strip()
@@ -615,7 +689,7 @@ def cmd_spec_submit(args, store):
             state, "validation", f"Approve the {SPECS[args.kind]} spec (revision {s['revision']})?",
             args.note or f"Read it under Specifications → {SPECS[args.kind]}.",
             [APPROVE, REQUEST_CHANGES], {"type": "spec-approval", "spec": args.kind},
-            {"stage": "specification", "spec": args.kind}, allow_free=False)
+            {"stage": "specification", "spec": args.kind}, allow_free=False, option_help=APPROVAL_HELP)
     print(f"{q['id']} asks the user to approve the {args.kind} spec. `wait {q['id']}`.")
 
 
@@ -661,7 +735,7 @@ def cmd_plan_submit(args, store):
         lines = [f"{p['id']}. **{p['title']}**: {p['goal']}" for p in state["phases"]]
         q = add_question(state, "validation", f"Approve the phase plan ({len(state['phases'])} phases)?",
                          "\n".join(lines), [APPROVE, REQUEST_CHANGES], {"type": "plan-approval"},
-                         {"stage": "specification"}, allow_free=False)
+                         {"stage": "specification"}, allow_free=False, option_help=APPROVAL_HELP)
     print(f"{q['id']} asks the user to approve the plan. `wait {q['id']}`.")
 
 
@@ -720,7 +794,8 @@ def cmd_phase_complete(args, store):
             f"({sum(f['status'] == 'fixed' for f in fs)} fixed, {sum(f['status'] == 'accepted' for f in fs)} accepted)."
         q = add_question(state, "validation", f"Approve phase {p['id']}: {p['title']}?", body.strip(),
                          [APPROVE, REQUEST_CHANGES], {"type": "phase-approval", "phase": p["id"]},
-                         {"stage": "implementation", "phase": p["id"]}, allow_free=False)
+                         {"stage": "implementation", "phase": p["id"]}, allow_free=False,
+                         option_help=APPROVAL_HELP)
     print(f"{q['id']} asks the user to approve phase {args.id}. `wait {q['id']}`.")
 
 
@@ -773,31 +848,56 @@ def cmd_finding_add(args, store):
     pid = parse_pid(args.phase)
     if (pid == "spec") != (args.review == SPEC_REVIEW):
         raise GateError("Specification findings are `--phase spec --review specification`.")
+    if args.severity in BLOCKING and not (args.scenario and args.recommendation):
+        raise GateError(f"A {args.severity} finding blocks the project and the user must decide on it: give "
+                        "--scenario (what an input or user does, and what goes wrong) and --recommendation "
+                        "(the fix you propose).")
     with store.edit() as state:
         if pid not in ("spec", "final"):
             phase(state, pid)
         fid = next_id(state, "F")
         f = {"id": fid, "phase": pid, "review": args.review, "severity": args.severity,
              "title": args.title, "detail": args.detail or "", "location": args.location or "",
+             "scenario": args.scenario or "", "recommendation": args.recommendation or "",
              "status": "open", "resolution": "", "at": now(), "resolved_at": None,
              "found_by": actor(state)}
         state["findings"].append(f)
         log(state, f"{fid} ({args.severity}, {args.review}): {args.title}", "finding")
         q = None
         if args.severity in BLOCKING:
-            body = (f"**{args.severity.upper()}** {args.review} finding in {where(pid)}.\n\n"
-                    f"{args.detail or ''}\n\n" + (f"Location: `{args.location}`\n\n" if args.location else "") +
-                    "Development is stopped until you decide.")
-            q = add_question(state, "decision", f"{fid}: {args.title}", body,
+            q = add_question(state, "decision", f"{fid}: {args.title}", triage_body(state, f),
                              [TRIAGE_FIX, TRIAGE_REDESIGN, TRIAGE_ACCEPT, TRIAGE_STOP],
                              {"type": "finding-triage", "finding": fid},
                              {"stage": state["stage"], "phase": pid, "finding": fid,
-                              "spec": args.spec or ("security" if args.review == "security" else None)})
+                              "spec": args.spec or ("security" if args.review == "security" else None)},
+                             option_help=TRIAGE_HELP)
     if q:
         print(f"{fid} recorded. BLOCKING: development stops. {q['id']} asks the user to decide. "
               f"Stop writing code and `wait {q['id']}`.")
     else:
         print(f"{fid} recorded.")
+
+
+def triage_body(state, f):
+    """The triage question: enough to decide without opening the code or the report."""
+    meaning = SEVERITY_MEANING.get(f["review"], {}).get(f["severity"])
+    review = latest_review(state, f["phase"], f["review"])
+    source = (f"the {f['review']} review of {where(f['phase'])}" if f["review"] != SPEC_REVIEW
+              else "the specification review")
+    out = [f"**{f['severity'].upper()}** finding from {source}. Development is stopped until you decide."]
+    if meaning:
+        out.append(f"_{f['severity'].capitalize()} means: {meaning}_")
+    if f["detail"]:
+        out.append(f"### What is wrong\n\n{f['detail']}")
+    out.append(f"### How it goes wrong\n\n{f['scenario']}")
+    if f["location"]:
+        out.append(f"### Where\n\n`{f['location']}`")
+    out.append(f"### Proposed fix\n\n{f['recommendation']}")
+    if review:
+        out.append(f"Full review report: `{review['report']}` ({review['id']}).")
+    out.append("Not sure which option fits? Use **Talk about this** to ask the agent first; "
+               "development stays stopped meanwhile.")
+    return "\n\n".join(out)
 
 
 def cmd_finding_resolve(args, store):
@@ -827,9 +927,35 @@ def cmd_ask(args, store):
         body = args.body
         if args.body_file:
             body = Path(args.body_file).read_text()
-        q = add_question(state, args.kind, args.title, body or "", args.option or [], None, ctx,
-                         allow_free=not args.no_free)
+        options, helps = parse_options(args.option)
+        q = add_question(state, args.kind, args.title, body or "", options, None, ctx,
+                         allow_free=not args.no_free, option_help=helps)
     print(q["id"])
+
+
+def cmd_reply(args, store):
+    """The agent's side of a "Talk about this" thread; can also clarify the question itself."""
+    text = Path(args.message_file).read_text() if args.message_file else args.message
+    if not (text or "").strip():
+        raise GateError("Give --message or --message-file.")
+    with store.edit() as state:
+        q = get_question(state, args.id)
+        if q["status"] != "open":
+            raise GateError(f"{q['id']} is no longer open.")
+        q.setdefault("thread", []).append({"by": actor(state) or ORCHESTRATOR, "text": text.strip(), "at": now()})
+        changed = []
+        if args.body or args.body_file:
+            q["body"] = Path(args.body_file).read_text() if args.body_file else args.body
+            changed.append("question text")
+        if args.option:
+            if q.get("effect"):
+                raise GateError(f"{q['id']}'s options drive the framework and cannot be changed; "
+                                "explain them in the message instead.")
+            q["options"], q["option_help"] = parse_options(args.option)
+            changed.append("options")
+        log(state, f"{q['id']}: agent replied" + (f" and revised the {' and '.join(changed)}." if changed else "."),
+            "question")
+    print(f"Reply added to {args.id}; it is still open. `wait {args.id}` for the answer or the next message.")
 
 
 def cmd_wait(args, store):
@@ -852,9 +978,17 @@ def cmd_wait(args, store):
             raise GateError(f"No question {', '.join(missing)}.")
         done = [i for i in ids if qs[i]["status"] != "open"]
         pending = [i for i in ids if qs[i]["status"] == "open"]
-        if done and (first or not pending):
+        # A message in a "Talk about this" thread always wakes the agent: the user is waiting on it.
+        talk = [i for i in ids if discussing(qs[i])]
+        if talk or (done and (first or not pending)):
             out = [{"id": i, "title": qs[i]["title"], **(qs[i]["answer"] or {"withdrawn": True})} for i in done]
+            out += [{"id": i, "title": qs[i]["title"], "status": "discussing", "thread": qs[i]["thread"]}
+                    for i in talk]
             print(json.dumps(out if len(out) > 1 else out[0], indent=2))
+            if talk:
+                print(f"The user chose \"Talk about this\" on {', '.join(talk)}: it is NOT answered. Read the "
+                      "thread, answer them with `reply <id> --message ...` (add --body/--option to clarify the "
+                      "question itself), then `wait` again.")
             if any(qs[i]["status"] == "superseded" for i in done):
                 print("A question was withdrawn because what it asked about changed. Do not treat it as answered.")
             if pending:
@@ -964,6 +1098,11 @@ def cmd_decisions(args, store):
             print("- Question asked:\n\n" + "\n".join("  > " + line for line in q["body"].splitlines()))
             if q["options"]:
                 print(f"\n  Options: {' / '.join(q['options'])}")
+        if q and q.get("thread"):
+            print("- Discussed before answering:")
+            for m in q["thread"]:
+                who = "User" if m["by"] == "user" else m["by"]
+                print(f"\n  {who}: " + "\n  ".join(m["text"].splitlines()))
         print(f"- Decision: {d['decision']}")
         if d.get("rationale"):
             print(f"- Rationale or comment: {d['rationale']}")
@@ -1021,7 +1160,7 @@ def cmd_final_complete(args, store):
         q = add_question(state, "validation", "Approve the final review and close the project?",
                          args.summary or "Both final reviews passed.", [APPROVE, REQUEST_CHANGES],
                          {"type": "final-approval"}, {"stage": "final-review", "phase": "final"},
-                         allow_free=False)
+                         allow_free=False, option_help=APPROVAL_HELP)
     print(f"{q['id']} asks for final approval. `wait {q['id']}`.")
 
 
@@ -1119,7 +1258,7 @@ def make_handler(store, token, port, extra_hosts=(), require_key=False, check_ho
                 return self._send(403, json.dumps({"error": "Missing or wrong token. Reload the page."}))
             if not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._send(415, json.dumps({"error": "JSON only."}))
-            if self.path not in ("/api/answer", "/api/models"):
+            if self.path not in ("/api/answer", "/api/models", "/api/discuss"):
                 return self._send(404, json.dumps({"error": "Not found."}))
             length = int(self.headers.get("Content-Length", 0))
             if length > 64_000:
@@ -1139,6 +1278,10 @@ def make_handler(store, token, port, extra_hosts=(), require_key=False, check_ho
                             else:
                                 state["models"]["confirmed"] = True
                     return self._send(200, json.dumps({"ok": True, "models": state["models"]}))
+                if self.path == "/api/discuss":
+                    with store.edit() as state:
+                        q = discuss_question(state, str(body.get("id", "")), str(body.get("message", ""))[:20_000])
+                    return self._send(200, json.dumps({"ok": True, "question": q}))
                 with store.edit() as state:
                     q = answer_question(state, str(body.get("id", "")), str(body.get("choice", "")),
                                         str(body.get("comment", ""))[:20_000])
@@ -1248,6 +1391,8 @@ def build_parser():
     p.add_argument("--title", required=True)
     p.add_argument("--detail")
     p.add_argument("--location", help="file:line, component, or spec section.")
+    p.add_argument("--scenario", help="What an input or user does and what goes wrong. Required for high/critical.")
+    p.add_argument("--recommendation", help="The fix you propose. Required for high/critical.")
     p.add_argument("--spec", choices=list(SPECS), help="The spec a specification finding is about.")
     p = fd.add_parser("resolve")
     p.add_argument("id")
@@ -1259,10 +1404,21 @@ def build_parser():
     p.add_argument("--title", required=True)
     p.add_argument("--body", help="Context in markdown.")
     p.add_argument("--body-file")
-    p.add_argument("--option", action="append", help="A choice; repeat. Omit for free text.")
+    p.add_argument("--option", action="append",
+                   help="A choice, as \"Label|what choosing it means\"; repeat. Omit for free text.")
     p.add_argument("--no-free", action="store_true", help="Only the listed options are allowed.")
     p.add_argument("--spec", choices=list(SPECS))
     p.add_argument("--phase")
+
+    p = sub.add_parser("reply", help="Answer the user in a question's \"Talk about this\" thread; "
+                                     "the question stays open.")
+    p.add_argument("id")
+    p.add_argument("--message", help="Your reply, in markdown.")
+    p.add_argument("--message-file")
+    p.add_argument("--body", help="Replace the question text, when the discussion showed it was unclear.")
+    p.add_argument("--body-file")
+    p.add_argument("--option", action="append", help="Replace the options (\"Label|meaning\"); "
+                                                     "not allowed on approvals and triage.")
 
     p = sub.add_parser("wait", help="Block until questions are answered in the console; prints the answers. "
                                     "Run it as a background command so the answer wakes you.")
@@ -1322,7 +1478,7 @@ COMMANDS = {
     ("phase", "start"): cmd_phase_start, ("phase", "complete"): cmd_phase_complete,
     ("review", "add"): cmd_review_add, ("finding", "add"): cmd_finding_add,
     ("finding", "resolve"): cmd_finding_resolve, ("ask", None): cmd_ask, ("wait", None): cmd_wait,
-    ("answer", None): cmd_answer, ("decide", None): cmd_decide, ("decisions", None): cmd_decisions,
+    ("reply", None): cmd_reply, ("answer", None): cmd_answer, ("decide", None): cmd_decide, ("decisions", None): cmd_decisions,
     ("models", None): cmd_models,
     ("agent", "start"): cmd_agent_start, ("agent", "update"): cmd_agent_update,
     ("agent", "done"): cmd_agent_done, ("agent", "rename"): cmd_agent_rename,

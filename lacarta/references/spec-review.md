@@ -78,7 +78,9 @@ Then record it:
     --report {REPORT_PATH} --summary "..." --reviewer fresh-agent
 and each finding:
   python3 {L} finding add --phase spec --review specification --spec <file> \
-    --severity ... --title ... --detail ... --location "<file> §<section>"
+    --severity ... --title ... --detail ... --location "<file> §<section>" \
+    --scenario "<what goes wrong if built as written>" --recommendation "<the spec change>"
+  (--scenario and --recommendation are required for high and critical.)
 Verdict is fail if any finding is medium or above.
 ```
 

@@ -40,7 +40,8 @@ decision log: they record earlier opinions you must not inherit. Do not run `sta
 6. Record: python3 {L} review add --phase final --type functional --verdict pass|fail
    --report {REPORT_PATH} --summary "..." --reviewer fresh-agent
    and for each finding: python3 {L} finding add --phase final --review functional
-   --severity ... --title ... --detail ... --location ...
+   --severity ... --title ... --detail ... --location ... --scenario ... --recommendation ...
+   (--scenario and --recommendation are required for high and critical.)
 Verdict is fail if any must requirement is not fully met or any finding is high or critical.
 ```
 
@@ -72,6 +73,7 @@ codebase. Do not read .lacarta/reviews/, .lacarta/state.json or the decision log
 6. Record: python3 {L} review add --phase final --type security --verdict pass|fail
    --report {REPORT_PATH} --summary "..." --reviewer fresh-agent
    and each finding with python3 {L} finding add --phase final --review security ...
+   (--scenario and --recommendation are required for high and critical.)
 Verdict is fail if any SR is unmet or any finding is medium or above.
 ```
 

@@ -52,7 +52,9 @@ Record each review and each finding:
 python3 $L review add --phase 2 --type security --verdict fail --report /tmp/review.md \
   --summary "Two issues in the upload endpoint" --reviewer subagent
 python3 $L finding add --phase 2 --review security --severity high \
-  --title "Upload path traversal" --detail "..." --location "app/upload.py:42"
+  --title "Upload path traversal" --detail "..." --location "app/upload.py:42" \
+  --scenario "A filename of ../../app/config.py overwrites the app's config" \
+  --recommendation "Generate stored names server-side; reject path separators"
 ```
 
 ## When a finding is high or critical
@@ -60,7 +62,7 @@ python3 $L finding add --phase 2 --review security --severity high \
 `finding add` with high or critical severity blocks the project and asks the user a triage question. From that moment:
 
 1. **Stop writing code.** Not on the finding, not on anything else. Tell the user in the terminal that development is stopped and why, with the question id.
-2. `wait` for the triage answer.
+2. `wait` for the triage answer. The question shows the finding's scenario, location and proposed fix, and what each option does. If the user picks **Talk about this**, `wait` returns their message: `reply` with what they need to decide (impact in plain words, what each option would cost here, your recommendation), and `wait` again. Development stays stopped throughout.
 3. Act on it:
    - **Fix it now**: fix only that finding, add a test that proves it, re-run the security review on the affected code, then `finding resolve F-n --status fixed --note "<fix and how it was verified>"`.
    - **Change the spec or design**: update the spec(s), ask for any further decision the change needs, then fix and resolve as above.

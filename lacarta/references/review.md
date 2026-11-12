@@ -30,7 +30,9 @@ Lacarta CLI: python3 {L}
 7. Record it: python3 {L} review add --phase {N} --type functional --verdict pass|fail
    --report {REPORT_PATH} --summary "..." --reviewer subagent
    and each finding: python3 {L} finding add --phase {N} --review functional --severity ... --title ...
-   --detail ... --location ...
+   --detail ... --location ... --scenario ... --recommendation ...
+   (--scenario and --recommendation are required for high and critical: the user decides on those
+   from what you write, without opening the code.)
 Verdict is fail if any must requirement covered by this phase is not met, if tests fail, or if any
 finding is high or critical.
 ```

@@ -42,8 +42,9 @@ Run commands from the project root, or anywhere below it. State lives in `<proje
 | Models for each role | `models` (`--json`); `models --set role=alias` only when the user asks in the terminal |
 | Start the console | `serve` (default port 4747), run in the background |
 | Where are we, what is next | `status` (`--json` for everything) |
-| Ask the user | `ask --kind question\|decision\|validation --title ... [--body/--body-file] [--option ...] [--spec ...] [--phase ...]` prints `Q-n` |
-| Wait for answers | `wait [Q-n ...]` as a **background** command; no ids = every open question, returns on the first answer |
+| Ask the user | `ask --kind question\|decision\|validation --title ... [--body/--body-file] [--option "Label\|what it means" ...] [--spec ...] [--phase ...]` prints `Q-n` |
+| Wait for answers | `wait [Q-n ...]` as a **background** command; no ids = every open question, returns on the first answer or the first "Talk about this" message |
+| User wants to talk about a question | `reply Q-n --message ... [--body/--body-file] [--option ...]`; the question stays open |
 | User answered in the terminal | `answer Q-n --choice ... --comment "<their words>"` |
 | Log your own decision | `decide --title ... --decision ... --rationale ... [--spec ...] [--phase ...]` |
 | Read the decision log | `decisions` (markdown) |
@@ -101,7 +102,8 @@ The console is where the user answers; the chat is not. You watch the console an
 - **Wait in the background.** Start `python3 $L wait` as a background command (Bash `run_in_background: true`; it has no time limit by default). With no ids it watches every open question and exits on the first answer; with ids it waits for all of them (`--any` for the first). Then end your turn with one short line, for example: "Waiting for you in the console: Q-4 (database choice)." When the user answers, `wait` exits and you are woken with the answer and the `Next:` line; act on it, then start a new background `wait` if questions remain open. Do not poll `status` in a loop, and do not run `wait` in the foreground, where it holds your turn and times out.
 - **Work that does not depend on the answer can continue** while the background `wait` runs (drafting another spec, for instance), except when the project is blocked: then nothing at all.
 - **If the user answers in the chat anyway**, record their words with `answer Q-n --choice "..." --comment "..."` (the console marks it as given in the terminal) and carry on. Never use `answer` for anything the user did not say: an approval you give yourself is a gate you skipped.
-- Write question bodies in markdown, with the context needed to decide, the options and their trade-offs, and your recommendation. The user should be able to answer without opening the code.
+- Write question bodies in markdown, with the context needed to decide, the options and their trade-offs, and your recommendation. The user should be able to answer without opening the code. Give every option its meaning (`--option "Label|what choosing it does"`): the console shows it under the label.
+- **"Talk about this".** Every question in the console also offers it: the user writes to you instead of answering. `wait` then returns with `"status": "discussing"` and the thread. The question is **not** answered: reply with `reply Q-n --message "..."` (markdown; plain, direct, answering what they asked), and if the exchange shows the question itself was unclear, rewrite it in the same call with `--body` and, for your own questions, `--option`. Then `wait` again. Never treat a message as a choice, even when it leans one way; the user still answers with an option.
 - Answers come back as JSON with `choice` and `comment`. Read the comment: "Approve" with a comment often carries a condition.
 
 ## Stage guides

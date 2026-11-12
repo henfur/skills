@@ -178,6 +178,20 @@ h3 { font-size: 16px; line-height: 22px; font-weight: 700; margin: 0; }
 .btn.sm { height: 28px; padding: 0 10px; font-size: 13px; }
 @media (pointer: coarse) { .btn { height: 44px; } }
 .choice[aria-pressed="true"] { background: var(--brand-subtle); border-color: var(--brand-border); color: var(--brand-strong); box-shadow: inset 0 0 0 1px var(--brand-border); }
+.choice.talk { border-style: dashed; }
+.choice.talk[aria-pressed="true"] { border-style: solid; }
+.choice svg { flex: none; }
+/* Options that come with an explanation stack as cards: label on top, what it does below. */
+.choices-detailed { display: grid; gap: 8px; max-width: var(--readable-max); }
+.choices-detailed .choice { height: auto; display: block; text-align: left; padding: 10px 14px; white-space: normal; }
+.choices-detailed .choice .help { display: block; margin-top: 2px; font: 400 13px/19px var(--sans); color: var(--text-secondary); }
+.choices-detailed .choice[aria-pressed="true"] .help { color: inherit; }
+/* "Talk about this" conversation inside a question card. */
+.thread { display: grid; gap: 10px; max-width: var(--readable-max); padding: 12px; border-radius: var(--radius-lg); background: var(--surface-sunken); }
+.msg { display: flex; gap: 8px; align-items: flex-start; }
+.msg .bubble { flex: 1; min-width: 0; padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-raised); border: 1px solid var(--border-subtle); }
+.msg.user .bubble { background: var(--brand-subtle); border-color: var(--brand-border); }
+.msg .meta { font-size: 13px; line-height: 19px; color: var(--text-muted); margin-bottom: 2px; }
 
 textarea {
   width: 100%; min-height: 76px; resize: vertical; padding: 8px 12px;
@@ -205,6 +219,27 @@ textarea::placeholder { color: var(--text-muted); }
 .agent-card .name { font-size: 16px; line-height: 22px; font-weight: 700; }
 .agent-card .task { margin-top: 6px; overflow-wrap: anywhere; }
 .agent-card.finished { box-shadow: none; background: var(--surface-sunken); }
+.agent-card.asking { border-color: var(--brand-border); box-shadow: inset 0 0 0 1px var(--brand-border), var(--shadow-sm); }
+.agent-card.fresh { animation: fresh 1.6s ease-out 2; }
+@keyframes fresh { 0% { box-shadow: 0 0 0 0 var(--brand-border); } 100% { box-shadow: 0 0 0 10px transparent; } }
+.agent-card .ask-strip { grid-column: 1 / -1; display: grid; gap: 4px; justify-items: start; margin: 0 -16px -16px; padding: 10px 16px 12px; background: var(--brand-subtle); color: var(--brand-strong); border-top: 1px solid var(--brand-border); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.agent-card .ask-strip .btn { margin-top: 4px; text-decoration: none; }
+.avatar-wrap { position: relative; display: inline-block; }
+.ping { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: var(--radius-pill); background: var(--brand); border: 2px solid var(--surface); }
+.ping::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid var(--brand); animation: ping 1.8s ease-out infinite; }
+@keyframes ping { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(2.2); opacity: 0; } }
+.agent-group + .agent-group { margin-top: 20px; }
+.group-head { margin-bottom: 8px; gap: 8px; }
+/* Notifications: toasts stay until answered, opened or dismissed. */
+.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 300; display: grid; gap: 8px; width: min(380px, calc(100vw - 32px)); }
+.toast { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 12px; border-radius: var(--radius-lg); background: var(--surface-raised); border: 1px solid var(--brand-border); box-shadow: var(--shadow-glass); animation: toast-in 180ms ease-out; }
+.toast.danger { border-color: var(--danger-border); }
+.toast .t-title { font-weight: 700; overflow-wrap: anywhere; }
+.toast .t-actions { display: flex; gap: 8px; margin-top: 8px; }
+.toast .t-actions .btn { text-decoration: none; }
+.toast .close { background: none; border: 0; color: var(--text-muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 4px; border-radius: var(--radius-xs); }
+.toast .close:hover { background: var(--overlay-hover); }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 .asker { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .asker .who { font-weight: 700; }
 .model-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 16px; align-items: center; }
@@ -288,7 +323,7 @@ figure.diagram .err { text-align: left; }
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .live .long { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
@@ -297,8 +332,10 @@ figure.diagram .err { text-align: left; }
   <span id="stage-badge"></span>
   <span class="spacer"></span>
   <span class="live" id="live" role="status">Connecting…</span>
+  <button class="btn sm" id="notify" type="button" hidden>Enable alerts</button>
   <button class="btn sm" id="theme" type="button" aria-label="Switch theme">Theme</button>
 </header>
+<div class="toasts" id="toasts" role="region" aria-label="Notifications" aria-live="polite"></div>
 <div class="layout">
   <nav class="side" id="nav" aria-label="Sections"></nav>
   <main><div class="content" id="view"><p class="muted">Loading project state…</p></div></main>
@@ -411,7 +448,7 @@ function renderNav() {
 function render() {
   if (!data) return;
   const st = data.state, d = data.derived;
-  document.title = `${st.project.name}: Lacarta console`;
+  document.title = `${d.open_questions ? `(${d.open_questions}) ` : ""}${st.project.name}: Lacarta console`;
   document.getElementById("project").innerHTML = `${esc(st.project.name)}`;
   document.getElementById("stage-badge").innerHTML = d.blocked ? badge("stopped", "Blocked") : badge(st.stage, label(st.stage));
   renderNav();
@@ -476,28 +513,52 @@ function answeredTo(x) {
   return q ? `<span class="small muted">answering ${agentChip(askerId(q), false)}</span>` : "";
 }
 
+// Agents are shown by what they do, every one of them, finished or not.
+const AGENT_GROUPS = [
+  ["Orchestrator", ["orchestrator"]],
+  ["Developers", ["implementation"]],
+  ["Reviewers", ["spec_review", "functional_review", "security_review"]],
+  ["Final reviewers", ["final_functional_review", "final_security_review"]],
+];
+// Within a group: whoever needs you first, then the busy ones, then the finished ones.
+const STATUS_ORDER = ["waiting", "blocked", "working", "idle", "failed", "done"];
+
 function agentsSection(st, d) {
   const agents = st.agents || [];
   if (!agents.length) return "";
   const status = a => d.agent_status[a.id] || a.status;
-  const live = agents.filter(a => !["done", "failed"].includes(status(a)));
-  const finished = agents.filter(a => ["done", "failed"].includes(status(a))).reverse();
   const model = a => (data.catalog.models[a.model] || {}).name || a.model;
+  const known = new Set(AGENT_GROUPS.flatMap(g => g[1]));
+  const groups = [...AGENT_GROUPS, ["Other", null]].map(([name, roles]) => [name,
+    agents.filter(a => roles ? roles.includes(a.role) : !known.has(a.role))
+      .sort((x, y) => STATUS_ORDER.indexOf(status(x)) - STATUS_ORDER.indexOf(status(y))
+        || String(y.updated_at || "").localeCompare(String(x.updated_at || "")))]).filter(g => g[1].length);
   const card = a => {
     const asking = st.questions.filter(q => q.status === "open" && askerId(q) === a.id);
-    return `<article class="card agent-card ${["done", "failed"].includes(status(a)) ? "finished" : ""}">
-      ${avatar(a, "md")}
+    const s = status(a);
+    const strip = asking.length ? `<div class="ask-strip">
+        <div class="small"><strong>${asking.length === 1 ? "Needs your answer" : `${asking.length} questions for you`}</strong></div>
+        ${asking.slice(0, 2).map(q => `<div class="small"><span class="chip">${esc(q.id)}</span> ${esc(q.title)}${(q.thread || []).length && q.thread[q.thread.length - 1].by === "user" ? ` <span class="muted">· replying to your message</span>` : ""}</div>`).join("")}
+        <a class="btn sm primary" href="#questions">Answer</a></div>` : "";
+    return `<article class="card agent-card ${["done", "failed"].includes(s) ? "finished" : ""} ${asking.length ? "asking" : ""} ${asking.some(q => freshQs.has(q.id)) ? "fresh" : ""}" aria-label="${esc(a.name)}, ${esc(roleLabel(a))}">
+      <span class="avatar-wrap">${avatar(a, "md")}${asking.length ? `<span class="ping" aria-hidden="true"></span>` : ""}</span>
       <div style="min-width:0">
-        <div class="row" style="justify-content:space-between"><span class="name">${esc(a.name)}</span>${agentBadge(status(a))}</div>
+        <div class="row" style="justify-content:space-between"><span class="name">${esc(a.name)}</span>${agentBadge(s)}</div>
         <div class="small muted">${esc(roleLabel(a))} · ${esc(model(a))}${a.phase != null ? ` · ${esc(phaseName(a.phase))}` : ""}</div>
         <div class="task small">${esc(a.summary || a.task)}</div>
-        ${asking.length ? `<div class="small" style="margin-top:6px"><a href="#questions">${asking.length === 1 ? `Asking ${esc(asking[0].id)}: ${esc(asking[0].title)}` : `${asking.length} questions for you`}</a></div>` : ""}
         <div class="small muted" style="margin-top:6px">${a.finished_at ? `Finished ${ago(a.finished_at)}` : `Active ${ago(a.updated_at)}`}</div>
-      </div></article>`;
+      </div>${strip}</article>`;
   };
-  return `<h2>Agents · ${live.length} active</h2>
-    <div class="agents">${live.map(card).join("")}</div>
-    ${finished.length ? `<details style="margin-top:12px"><summary class="small">Finished agents · ${finished.length}</summary><div class="agents" style="margin-top:12px">${finished.map(card).join("")}</div></details>` : ""}`;
+  const tally = list => {
+    const n = {};
+    list.forEach(a => { const s = status(a); n[s] = (n[s] || 0) + 1; });
+    return STATUS_ORDER.filter(s => n[s]).map(s => `<span class="small muted">${n[s]} ${esc((AGENT_STATUS[s] || [, label(s)])[1].toLowerCase())}</span>`).join('<span class="small muted" aria-hidden="true">·</span>');
+  };
+  const active = agents.filter(a => !["done", "failed"].includes(status(a))).length;
+  return `<h2>Agents · ${active} active of ${agents.length}</h2>
+    ${groups.map(([name, list]) => `<section class="agent-group" aria-label="${esc(name)}">
+      <div class="row group-head"><span class="overline">${esc(name)}</span>${tally(list)}</div>
+      <div class="agents">${list.map(card).join("")}</div></section>`).join("")}`;
 }
 
 function kindBadge(q) {
@@ -527,34 +588,68 @@ function viewQuestions(st, d) {
       <div class="small" style="margin-top:4px"><span class="muted">Answer:</span> ${esc(q.answer.choice || q.answer.comment)}${q.answer.choice && q.answer.comment ? ` · <span class="muted">${esc(q.answer.comment)}</span>` : ""} <span class="muted">· ${ago(q.answer.at)}</span></div></div>`).join("")}</div>` : ""}`;
 }
 
+const ICON_CHAT = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+
+// Who answers a "Talk about this" message: the asker, or the orchestrator once the asker has finished.
+function replier(q) {
+  const a = agentById(askerId(q));
+  const st = a && data.derived.agent_status[a.id];
+  return (!a || st === "done" || st === "failed") ? agentById("A-1") : a;
+}
+
+function threadView(q) {
+  const thread = q.thread || [];
+  if (!thread.length) return "";
+  const msgs = thread.map(m => {
+    const a = m.by === "user" ? null : agentById(m.by);
+    return `<div class="msg ${m.by === "user" ? "user" : ""}">${a ? avatar(a) : ""}<div class="bubble">
+      <div class="meta">${m.by === "user" ? "You" : esc(a ? a.name : m.by)} · ${ago(m.at)}</div><div class="md">${md(m.text)}</div></div></div>`;
+  }).join("");
+  const r = replier(q);
+  const pending = thread[thread.length - 1].by === "user"
+    ? `<div class="small muted">Waiting for ${esc(r ? r.name : "the agent")} to reply…</div>` : "";
+  return `<section class="thread" aria-label="Conversation about ${esc(q.id)}">${msgs}${pending}</section>`;
+}
+
 function questionCard(q) {
-  const dr = drafts[q.id] || (drafts[q.id] = { choice: "", comment: "" });
+  const dr = drafts[q.id] || (drafts[q.id] = { choice: "", comment: "", talk: false, message: "" });
   const triage = (q.effect || {}).type === "finding-triage";
-  const opts = q.options.map(o => `<button type="button" class="btn choice" data-q="${esc(q.id)}" data-choice="${esc(o)}" aria-pressed="${dr.choice === o}">${esc(o)}</button>`).join("");
+  const helps = q.option_help || {};
+  const detailed = q.options.some(o => helps[o]);
+  const r = replier(q);
+  const who = r ? r.name : "the agent";
+  const opts = q.options.map(o => `<button type="button" class="btn choice" data-q="${esc(q.id)}" data-choice="${esc(o)}" aria-pressed="${!dr.talk && dr.choice === o}">${esc(o)}${detailed && helps[o] ? `<span class="help">${esc(helps[o])}</span>` : ""}</button>`).join("")
+    + `<button type="button" class="btn choice talk" data-q="${esc(q.id)}" data-talk="1" aria-pressed="${dr.talk}">${detailed ? "" : ICON_CHAT + " "}Talk about this${detailed ? `<span class="help">Not sure yet? Ask ${esc(who)} about this question first. It stays open until you answer it.</span>` : ""}</button>`;
   const needsComment = triage && dr.choice === "Accept the risk";
   const hint = q.options.length === 0 ? "Your answer" : q.allow_free ? "Comment, or your own answer" : "Comment (optional)";
+  const field = dr.talk
+    ? `<div><label class="field" for="c-${esc(q.id)}">Your message to ${esc(who)}</label>
+      <textarea id="c-${esc(q.id)}" data-q="${esc(q.id)}" data-field="message" placeholder="What is unclear, or what would you like to know before deciding?">${esc(dr.message)}</textarea></div>`
+    : `<div><label class="field" for="c-${esc(q.id)}">${needsComment ? "Why you accept this risk (required)" : hint}</label>
+      <textarea id="c-${esc(q.id)}" data-q="${esc(q.id)}" data-field="comment" placeholder="${q.kind === "validation" ? "What should change, if anything" : "Add context for the agent"}">${esc(dr.comment)}</textarea></div>`;
   return `
   <article class="card q ${triage ? "blocking" : ""}" aria-labelledby="t-${esc(q.id)}">
     <header>${askerBlock(q)}<span class="row" style="margin-left:auto"><span class="chip">${esc(q.id)}</span>${kindBadge(q)}${ctxChips(q.context || {})}</span></header>
     <div class="body stack">
       <h3 id="t-${esc(q.id)}">${esc(q.title)}</h3>
       ${q.body ? `<div class="md">${md(q.body)}</div>` : ""}
-      ${opts ? `<div class="row" role="group" aria-label="Choices">${opts}</div>` : ""}
-      <div><label class="field" for="c-${esc(q.id)}">${needsComment ? "Why you accept this risk (required)" : hint}</label>
-      <textarea id="c-${esc(q.id)}" data-q="${esc(q.id)}" placeholder="${q.kind === "validation" ? "What should change, if anything" : "Add context for the agent"}">${esc(dr.comment)}</textarea></div>
+      ${threadView(q)}
+      <div class="${detailed ? "choices-detailed" : "row"}" role="group" aria-label="Choices">${opts}</div>
+      ${field}
     </div>
     <footer><span class="err" id="e-${esc(q.id)}" role="alert">${esc(errors[q.id] || "")}</span>
-      <button type="button" class="btn primary" data-send="${esc(q.id)}">Send answer</button></footer>
+      <button type="button" class="btn primary" data-send="${esc(q.id)}">${dr.talk ? `Send to ${esc(who)}` : "Send answer"}</button></footer>
   </article>`;
 }
 
 function bindQuestions() {
   document.querySelectorAll("button.choice").forEach(b => b.onclick = () => {
     const dr = drafts[b.dataset.q];
-    dr.choice = dr.choice === b.dataset.choice ? "" : b.dataset.choice;
+    if (b.dataset.talk) { dr.talk = !dr.talk; }
+    else { dr.talk = false; dr.choice = dr.choice === b.dataset.choice ? "" : b.dataset.choice; }
     render();
   });
-  document.querySelectorAll("textarea[data-q]").forEach(t => t.oninput = () => { drafts[t.dataset.q].comment = t.value; });
+  document.querySelectorAll("textarea[data-q]").forEach(t => t.oninput = () => { drafts[t.dataset.q][t.dataset.field] = t.value; });
   document.querySelectorAll("button[data-send]").forEach(b => b.onclick = () => send(b.dataset.send, b));
 }
 
@@ -562,12 +657,14 @@ async function send(id, btn) {
   const dr = drafts[id];
   btn.disabled = true; btn.textContent = "Sending…";
   try {
-    const r = await fetch("/api/answer", {
+    const r = await fetch(dr.talk ? "/api/discuss" : "/api/answer", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Lacarta-Token": TOKEN },
-      body: JSON.stringify({ id, choice: dr.choice, comment: dr.comment }),
+      body: JSON.stringify(dr.talk ? { id, message: dr.message } : { id, choice: dr.choice, comment: dr.comment }),
     });
     const j = await r.json();
-    if (!r.ok) { errors[id] = j.error || "The answer was not saved."; }
+    if (!r.ok) { errors[id] = j.error || (dr.talk ? "The message was not sent." : "The answer was not saved."); }
+    // A sent message keeps the answer draft and returns to answering mode; the reply appears in the thread.
+    else if (dr.talk) { dr.talk = false; dr.message = ""; delete errors[id]; }
     else { delete drafts[id]; delete errors[id]; }
   } catch (e) {
     errors[id] = "The console server is not reachable. Check that `lacarta.py serve` is running, then send again.";
@@ -783,8 +880,77 @@ function typing() {
   const a = document.activeElement;
   return a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT" || a.tagName === "SELECT");
 }
+// ---- Notifications: a new question, or an agent's reply in a "Talk about this" thread.
+// Shown as a toast in the page and, when the tab is in the background and the user allowed it,
+// as a system notification. Whatever is already there when the page loads is not announced.
+let seenEvents = null;
+const freshQs = new Set();   // questions that arrived while the page was open: their agent's card flashes
+const toasts = new Map();    // event key -> question id
+
+function questionEvents(st) {
+  const out = [];
+  st.questions.filter(q => q.status === "open").forEach(q => {
+    out.push({ key: q.id, q, by: askerId(q), kind: "ask" });
+    (q.thread || []).forEach((m, i) => { if (m.by !== "user") out.push({ key: `${q.id}#${i}`, q, by: m.by, kind: "reply" }); });
+  });
+  return out;
+}
+
+function notifyChanges() {
+  const events = questionEvents(data.state);
+  if (seenEvents === null) { seenEvents = new Set(events.map(e => e.key)); return; }
+  events.filter(e => !seenEvents.has(e.key)).forEach(e => {
+    seenEvents.add(e.key);
+    if (e.kind === "ask") { freshQs.add(e.q.id); setTimeout(() => freshQs.delete(e.q.id), 4000); }
+    const a = agentById(e.by);
+    const who = a ? a.name : "An agent";
+    const head = e.kind === "ask" ? `${who} needs you` : `${who} replied`;
+    showToast(e, a, head);
+    if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+      try {
+        const n = new Notification(`${head}: ${e.q.id}`, { body: e.q.title, tag: e.key });
+        n.onclick = () => { window.focus(); location.hash = "#questions"; n.close(); };
+      } catch (err) {}
+    }
+  });
+  // An answered or withdrawn question takes its toasts with it.
+  const open = new Set(data.state.questions.filter(q => q.status === "open").map(q => q.id));
+  toasts.forEach((qid, key) => { if (!open.has(qid)) dismissToast(key); });
+}
+
+function showToast(e, a, head) {
+  const box = document.getElementById("toasts");
+  while (box.children.length >= 4) dismissToast(box.firstElementChild.dataset.key);
+  const el = document.createElement("div");
+  const triage = (e.q.effect || {}).type === "finding-triage";
+  el.className = `toast ${triage ? "danger" : ""}`;
+  el.dataset.key = e.key;
+  el.innerHTML = `${avatar(a, "md")}<div style="min-width:0">
+      <div class="small muted">${esc(head)} · ${esc(e.q.id)}${triage ? " · development stopped" : ""}</div>
+      <div class="t-title">${esc(e.q.title)}</div>
+      <div class="t-actions"><a class="btn sm primary" href="#questions">${e.kind === "ask" ? "Answer" : "Read reply"}</a></div></div>
+    <button type="button" class="close" aria-label="Dismiss">×</button>`;
+  el.querySelector("a").onclick = () => dismissToast(e.key);
+  el.querySelector(".close").onclick = () => dismissToast(e.key);
+  box.appendChild(el);
+  toasts.set(e.key, e.q.id);
+}
+
+function dismissToast(key) {
+  document.querySelector(`#toasts .toast[data-key="${CSS.escape(key)}"]`)?.remove();
+  toasts.delete(key);
+}
+
+// System notifications need a secure context (localhost is one) and the user's permission.
+function setupNotifyButton() {
+  const b = document.getElementById("notify");
+  b.hidden = !("Notification" in window) || !window.isSecureContext || Notification.permission !== "default";
+  b.onclick = async () => { try { await Notification.requestPermission(); } catch (e) {} setupNotifyButton(); };
+}
+setupNotifyButton();
+
 async function tick() {
-  if (await poll()) pendingRender = true;
+  if (await poll()) { notifyChanges(); pendingRender = true; }
   if (pendingRender && !typing()) { pendingRender = false; render(); }
 }
 
