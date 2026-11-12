@@ -1,6 +1,6 @@
 # lacarta (Go)
 
-The Go port of lacarta: one binary for the CLI, the hooks, the daemon and the console. Plan and progress: [`../docs/go-port-plan.md`](../docs/go-port-plan.md).
+The Go port of lacarta: one binary for the CLI, the hooks, the daemon and the console. Plan and progress: [`../docs/go-port-plan.md`](../docs/go-port-plan.md). What to do next: [`../docs/next-steps.md`](../docs/next-steps.md). Specification of the system: [`docs/specs/`](docs/specs/) (functional, architecture, stack, security).
 
 **Status: phases 1 and 2 done.** The binary replaces the Python prototype (`../lacarta/scripts/lacarta.py`) entirely: every command, every hook, `install`, and the console daemon, which serves the prototype's page unchanged until the Svelte console (phase 3).
 

@@ -1,6 +1,6 @@
 # Lacarta: Go port and skill split
 
-Status: proposal, 2026-11-12. Source of truth for behaviour until the port lands: the Python prototype in `lacarta/scripts/lacarta.py` and `lacarta/assets/ui/index.html`.
+Status: phases 1 and 2 done, 2026-11-12. Taking over? Start with [`next-steps.md`](next-steps.md). Source of truth for behaviour until the port lands: the Python prototype in `lacarta/scripts/lacarta.py` and `lacarta/assets/ui/index.html`.
 
 ## Progress
 
