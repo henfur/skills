@@ -33,6 +33,6 @@ Next: Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/arc
 [exit 0]
 
 $ --root app agent list
-  A-1   Ada        orchestrator             opus    working  Runs the framework and talks to you.
+  A-1   Jerry      orchestrator             opus    working  Runs the framework and talks to you.
 [exit 0]
 

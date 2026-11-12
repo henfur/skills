@@ -39,6 +39,6 @@ One daemon serves every project at `http://127.0.0.1:4747/`. Sessions start it w
 
 By default the console binds to loopback, rejects foreign `Host` and `Origin` headers, and requires a per-run token for every change. It only serves session transcripts from inside `~/.claude/`.
 
-**Remote control.** When an agent's turn ends, its Stop hook keeps the session waiting for your next message from the console, for up to 23 hours, instead of returning to the terminal. Press Esc in the terminal to take the session back. Turn it off machine-wide in Settings, or per project in its Chat.
+**Remote control.** Each session keeps `lacarta listen` running as a background command. When you write from the console, answer a question or ask about one, the listener returns and Claude Code wakes the agent, even when its turn had ended. The terminal stays usable the whole time. Turn it off machine-wide in Settings, or per project in its Chat.
 
 To reach the console from another machine, start it on another address: `serve --host 10.0.0.5` (or `--host 0.0.0.0 --allow-host my-box.lan`). The page and API then require the key printed in the URL (`?key=…`). Traffic is plain HTTP, so use a trusted network, or keep the default and tunnel with `ssh -L 4747:127.0.0.1:4747 host`.

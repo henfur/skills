@@ -2,7 +2,7 @@
 
 The Go port of lacarta: one binary for the CLI, the hooks, the daemon and the console. Plan and progress: [`../docs/go-port-plan.md`](../docs/go-port-plan.md). What to do next: [`../docs/next-steps.md`](../docs/next-steps.md). Specification of the system: [`docs/specs/`](docs/specs/) (functional, architecture, stack, security).
 
-**Status: phases 1 and 2 done.** The binary replaces the Python prototype (`../lacarta/scripts/lacarta.py`) entirely: every command, every hook, `install`, and the console daemon, which serves the prototype's page unchanged until the Svelte console (phase 3).
+**Status: phases 1 to 3 done.** The binary replaces the Python prototype (`../lacarta/scripts/lacarta.py`) entirely: every command, every hook, `install`, and the console daemon with its Svelte console. The prototype's page is still served at `/legacy/` until the new console has been checked by hand.
 
 To switch a machine from the prototype: stop its console, then `go build -o ~/.local/bin/lacarta ./cmd/lacarta && lacarta install` (replaces the prototype's hooks), and restart running sessions. State files are shared, so projects carry over as they are.
 
@@ -34,10 +34,32 @@ internal/hooks/    hook events, transcript reader, install (Claude Code)
 internal/server/   console daemon and API
 internal/golden/   parity suite
 skill/             embedded files (spec templates now; the whole skill in phase 4)
-web/               embedded console (the prototype's page, copied, until phase 3)
+web/app/           console source (Svelte 5, Vite, Bun); tests in web/app/tests/
+web/dist/          its build, committed and embedded
+web/legacy/        the prototype's page, served at /legacy/ until removed
 testdata/          scenarios and recordings
 ```
 
 The spec templates in `skill/templates/` and the page in `web/legacy/` are copies of the prototype's files until phase 4 removes it; change both.
 
 Besides the golden suite: `internal/hooks` tests the listening Stop hook (woken by a message, an answer or a "Talk about this" message; ended by remote control off or SIGTERM), the transcript reader and install; `internal/server` runs the prototype's daemon and the Go handler on the same state files and compares their JSON, then tests every action and the auth checks.
+
+## Console
+
+The console's source is `web/app/`; its build in `web/dist/` is committed, so `go build` needs no JavaScript tooling. After changing the console, rebuild it and commit both:
+
+```bash
+cd web/app
+nix shell nixpkgs#bun -c bun install
+nix shell nixpkgs#bun -c bun run build        # writes ../dist
+```
+
+While working on it, serve the build from disk instead of rebuilding Go each time: run `bun run build --watch` and, on a scratch home and port, `LACARTA_HOME=$(mktemp -d) LACARTA_WEB_DIR=web/dist lacarta serve --port 4799`.
+
+Smoke tests (Playwright, Chromium from nixpkgs; a daemon seeded through the CLI and hooks by `tests/seed.sh`):
+
+```bash
+BR=$(nix build --no-link --print-out-paths nixpkgs#playwright-driver.browsers)
+nix shell nixpkgs#bun -c env PLAYWRIGHT_BROWSERS_PATH=$BR PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true bunx playwright test
+```
+

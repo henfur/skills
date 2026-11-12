@@ -86,7 +86,7 @@ $ status
 $ decide --title "Keep SQLite for v1" --decision "SQLite" --rationale "One user" --phase 1
 $ decisions
 $ agent list
-$ agent rename A-2 --name Ada
+$ agent rename A-2 --name Jerry
 $ agent rename A-2 --name Bea
 $ agent update A-1 --task "Wrapping up" --status idle
 $ agent list

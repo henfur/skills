@@ -29,7 +29,7 @@ The CLI, the hooks and the daemon are the same binary. They never talk to each o
 | Core | `internal/core` | State types, store (locking, atomic writes, migration), hub, settings, daemon info, questions and effects, inbox, software gates, derived state and next action, sessions, Python-compatible formatting |
 | Hooks | `internal/hooks` | Hook events, transcript reader, `install` for Claude Code |
 | Server | `internal/server` | Console daemon: HTTP API, auth, page and vendored files, `Serve`, `EnsureDaemon` |
-| Web | `web` | Embedded console. Now: `legacy/` (the prototype's page). Phase 3: `dist/` built from `app/` |
+| Web | `web` | Embedded console: `dist/`, built from the Svelte app in `app/`; `legacy/`, the prototype's page, until it is removed |
 | Skill | `skill` | Embedded files for agents. Now: spec templates. Phase 4: the whole skill |
 | Parity suite | `internal/golden` | Replays scenarios against Go or the prototype and compares with recordings |
 
@@ -111,7 +111,7 @@ Contract for agents (byte-identical to the prototype, enforced by the golden sui
 | UserPromptSubmit | `prompt` | 15 s | |
 | PostToolUse | `post-tool` | 15 s | `*` |
 | Notification | `notification` | 15 s | |
-| Stop | `stop` | 86400 s | |
+| Stop | `stop` | 30 s (never waits) | |
 | SessionEnd | `session-end` | 15 s | |
 
 Behaviour per event: functional FR-2 to FR-4, FR-18. Every hook exits 0; panics and errors are logged.
@@ -124,7 +124,7 @@ Base: `http://127.0.0.1:4747/` by default. All JSON responses `application/json;
 
 | Method, path | Request | Response |
 | --- | --- | --- |
-| GET `/` (`?key=` when exposed) | | the console page; the literal `__LACARTA_TOKEN__` replaced by the token |
+| GET `/` (`?key=` when exposed) | | the console page; the literal `__LACARTA_TOKEN__` (in `<meta name="lacarta-token">`) replaced by the token; served from `LACARTA_WEB_DIR` instead of the embedded build when set |
 | GET `/vendor/{marked,purify,mermaid}.min.js` | | JavaScript, cached a day, no key needed |
 | GET `/api/hub` | | `{projects: [Summary], settings: Settings, catalog: Catalog}` |
 | GET `/api/p/{id}/state` | | `{id, state: State, derived: Derived, specs?: {kind: markdown}, reports?: {R-n: markdown}, chat: [ChatItem]}` (`specs`/`reports` for software projects, even when empty) |
@@ -134,7 +134,9 @@ Base: `http://127.0.0.1:4747/` by default. All JSON responses `application/json;
 | POST `/api/p/{id}/remote` | `{on: bool \| null}` | `{ok, result: {remote}}` |
 | POST `/api/p/{id}/archive` | `{archived: bool}` | `{ok}` |
 | POST `/api/settings` | `{models?: {kind: {role: alias}}, remote_control?: bool}` | `{ok, settings}` |
-| GET `/api/events` | | **phase 3**: SSE, events `hub` and `project` (data: id) on change |
+| GET `/api/events` (`?key=` when exposed: EventSource sends no headers) | | server-sent events: `hub` (any change) and `project` (data: its id), `retry: 2000`, a ping comment every 25 s |
+| GET `/assets/*` | | the console's built files, cached for a year (content-hashed names) |
+| GET `/legacy/` | | the prototype's page, until removed |
 
 Status codes: 200; 400 malformed; 405 other methods; 403 host, origin, token or key; 404 unknown path, project or action; 409 a gate refused (the gate's words); 413 body over 64 KB; 415 not JSON; 500 unreadable state. Text fields are capped (comment and messages at 20,000 characters).
 
@@ -169,19 +171,24 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant CC as Claude Code
-  participant S as stop hook
+  participant S as Stop hook
   participant F as state files
   participant B as browser
+  participant Ls as lacarta listen (background)
+  CC->>Ls: start as a background command (first turn)
+  Ls->>F: listening = {since, pid}
   CC->>S: stop (turn ended)
   S->>F: queued messages? → mark delivered, block with them
-  S->>F: else remote on: listening = {since, pid}
-  loop every second, up to 23 h
+  S->>F: else listener alive? since = now (console: "finished its turn")
+  S-->>CC: else remote on, no listener: block once: "start lacarta listen"
+  Note over CC: terminal free: the user can type here too
+  loop every second
     B->>F: POST message (daemon writes inbox)
-    S->>F: read: message / new answer / new Talk message / remote off?
+    Ls->>F: read: message / new answer / new Talk message / remote off / taken over?
   end
-  S->>F: listening = null
-  S-->>CC: {"decision": "block", "reason": "[lacarta console] ..."} → next turn
-  Note over S: SIGTERM (Esc): clear listening, exit 0 without blocking
+  Ls-->>CC: exits, printing "[lacarta console] ..." → Claude Code wakes the agent
+  CC->>Ls: acts, then starts the listener again
+  Note over Ls: SIGTERM: unregister; a dead pid stops counting
 ```
 
 ### 5.3 Blocking finding
@@ -214,14 +221,14 @@ Reviewer `finding add --severity high` → finding open + triage question (effec
 - Decision: `MarshalIndent` (ASCII, no HTML escaping), `PyDumps` for hook JSON and hashes, Python `repr()` for lists in refusals (`['A', 'B']`, `[3, 5]`), `str.capitalize`, ordered maps for `specs` and the hub.
 - Consequences: a little odd-looking Go, in exchange for byte-identical output and hash compatibility with existing projects.
 
-### AD-4: Remote control through a long Stop hook
-- Context: Claude Code has no API to inject a message into an idle interactive session.
-- Decision: a Stop hook with nothing to deliver waits (up to 23 h; installed with a 24 h timeout) and answers with a block reason, which Claude Code treats as the agent's next input.
-- Alternatives considered: read-only mirror; delivering only at the next prompt.
-- Consequences: the terminal is held while listening (Esc takes it back); Claude Code labels the message "Stop hook blocking error" (cosmetic).
+### AD-4: Remote control through a background listener
+- Context: Claude Code has no API to inject a message into an idle interactive session, but it wakes an idle agent when a background command finishes.
+- Decision: the agent keeps `lacarta listen` running as a background command; it returns when the console has something for the agent, which wakes it. The Stop hook only delivers what is already queued, and asks for a listener when none runs.
+- Alternatives considered: read-only mirror; delivering only at the next prompt; a Stop hook that waits (built first, 2026-11-12: it held the terminal for up to 23 hours, so the user couldn't talk to the session there).
+- Consequences: the terminal is never held; the agent spends a short turn restarting the listener after each wake-up; a message that arrives mid-turn reaches the agent at its next tool call. Claude Code labels Stop-hook deliveries "Stop hook blocking error" (cosmetic).
 
-### AD-5: Live updates by server-sent events from file polling (phase 3, proposed)
-- Decision: the daemon checks the modification times of `hub.json` and each project's `state.json` every 500 ms and emits `hub` / `project` events; the page re-fetches. Standard library only.
+### AD-5: Live updates by server-sent events from file polling
+- Decision: while at least one page is subscribed, the daemon compares the modification times and sizes of `hub.json`, `settings.json` and each project's `state.json` every 500 ms and emits `project` (with its id) and `hub` events; the page re-fetches. It polls every 15 s while the stream is healthy, every 2.5 s otherwise. Standard library only (`internal/server/events.go`).
 - Alternatives considered: fsnotify (a dependency, platform quirks), WebSockets (bidirectional is not needed).
 
 ### AD-6: Kinds of project behind an interface (phase 5)
@@ -238,7 +245,9 @@ lacarta-go/
 ├── internal/server/       daemon, API, auth (+ tests, including API parity)
 ├── internal/golden/       parity suite
 ├── skill/                 embedded skill files (templates now)
-├── web/                   embedded console (legacy/ now; app/ and dist/ in phase 3)
+├── web/app/               console source (Svelte), Playwright tests
+├── web/dist/              its build (committed, embedded)
+├── web/legacy/            the prototype's page (until removed)
 ├── testdata/scenarios/    parity scenarios
 ├── testdata/golden/       recordings (the behavioural spec)
 └── docs/specs/            these specs

@@ -26,14 +26,14 @@ $ hook notification <<< {"session_id":"s-1","message":"Claude needs your permiss
 [exit 0]
 
 $ agent list
-  A-1   Ada        agent                    opus    terminal Works on the task with you.
+  A-1   Jerry      agent                    opus    terminal Works on the task with you.
 [exit 0]
 
 $ hook post-tool <<< {"session_id":"s-1","tool_name":"Bash"}
 [exit 0]
 
 $ agent list
-  A-1   Ada        agent                    opus    working  Works on the task with you.
+  A-1   Jerry      agent                    opus    working  Works on the task with you.
 [exit 0]
 
 $ hook post-tool <<< {"session_id":"s-1"}
@@ -61,7 +61,7 @@ $ hook stop <<< {"session_id":"s-1"}
 [exit 0]
 
 $ agent list
-  A-1   Ada        agent                    opus    idle     Works on the task with you.
+  A-1   Jerry      agent                    opus    idle     Works on the task with you.
 [exit 0]
 
 $ ask --title "Still needed?"
@@ -105,14 +105,14 @@ $ hook session-start <<< {"session_id":"s-2","cwd":"$W/proj/sub","transcript_pat
 [exit 0]
 
 $ --root proj agent list
-  A-1   Ada        orchestrator             opus    working  Runs the framework and talks to you.
+  A-1   Jerry      orchestrator             opus    working  Runs the framework and talks to you.
 [exit 0]
 
 $ hook session-end <<< {"session_id":"s-2"}
 [exit 0]
 
 $ --root proj agent list
-  A-1   Ada        orchestrator             opus    idle     Runs the framework and talks to you.
+  A-1   Jerry      orchestrator             opus    idle     Runs the framework and talks to you.
 [exit 0]
 
 $ hook prompt <<< {"session_id":"s-3","cwd":"$W/proj","prompt":"hello"}

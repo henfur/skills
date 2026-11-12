@@ -132,16 +132,16 @@ Stages: `specification` → `implementation` → `final-review` → `done`; `sto
 
 ### FR-17: Named agents
 - Priority: must. Status: **done**.
-- Agents get human names (Ada, Basil, …) and ids `A-n`; A-1 is the orchestrator (software) or the agent (task). `agent start` registers a subagent with the model from Settings and prints the exact command line it must use; `agent done|update|rename|list` maintain them. A single-agent task refuses `agent start`.
+- Agents are named after Totally Spies characters and get ids `A-n`; A-1 is the orchestrator (software) or the agent (task) and is always Jerry. The console draws a portrait for each built-in name (`web/app/src/lib/portraits.js`); renamed agents show initials. `agent start` registers a subagent with the model from Settings and prints the exact command line it must use; `agent done|update|rename|list` maintain them. A single-agent task refuses `agent start`.
 - The console shows an agent's status: `waiting` (has an open question), `terminal` (A-1: a permission prompt in the CLI), `blocked` (A-1: project blocked), `listening` (A-1: turn ended, waiting for a console message), `working`, `idle`, `done`, `failed`.
 
 ### Console and remote control
 
 ### FR-18: Console messages and remote control
 - Priority: must. Status: **done**.
-- The user writes to A-1 from the console's Chat. A message is queued in the project's inbox and delivered as `[lacarta console] The user wrote from the lacarta console. Treat it exactly as if they had typed it here:` + the messages: after the agent's next tool call (PostToolUse context), or at the end of its turn (Stop hook block reason). With remote control on (Settings default, per-project override), a Stop hook with nothing to deliver keeps the session waiting, polling every second for up to 23 hours, for a message, an answer, or a "Talk about this" message; then it starts the agent's next turn with it. SIGTERM (Esc) ends the wait without blocking and clears the listening flag; a dead listener's pid also stops the console showing it as listening. Messages are refused when no session is connected.
+- The user writes to A-1 from the console's Chat. A message is queued in the project's inbox and delivered as `[lacarta console] The user wrote from the lacarta console. Treat it exactly as if they had typed it here:` + the messages: after the agent's next tool call (PostToolUse context), or at the end of its turn (Stop hook block reason). With remote control on (Settings default, per-project override), the agent keeps `lacarta listen` running as a background command: it polls every second and returns, printing what happened, when a message, an answer or a "Talk about this" message arrives; Claude Code then wakes the agent, which acts and starts the listener again. The terminal is never held. The Stop hook never waits: if no listener runs, it asks the agent once (not when `stop_hook_active`) to start one. One listener per project: a newer one takes over; turning remote control off ends it; SIGTERM unregisters it; a dead listener's pid stops the console showing the agent as listening. The console shows "listening" only while the agent is idle and its listener runs. Messages are refused when no session is connected.
 - Acceptance criteria:
-  - [x] `hooks_test.go` (all Stop cases, SIGTERM, dead pid); golden `hooks` (delivery).
+  - [x] `hooks_test.go` (Stop: delivery, asking for a listener once, not blocking with one; listen: message, answer, Talk, remote off, takeover, timeout, SIGTERM; dead pid); golden `hooks` (delivery).
 
 ### FR-19: Chat transcript
 - Priority: must. Status: **done** (reader, API, legacy page).
@@ -150,7 +150,7 @@ Stages: `specification` → `implementation` → `final-review` → `done`; `sto
   - [x] `hooks_test.go: TestReadChat, TestTranscriptOutsideClaudeIsRefused`.
 
 ### FR-20: Console views
-- Priority: must. Status: **done in the legacy page; to do in Svelte (phase 3)**. The legacy page `web/legacy/index.html` is the reference implementation.
+- Priority: must. Status: **done** (Svelte, `web/app/`; Playwright: `web/app/tests/console.spec.js`). The legacy page `web/legacy/index.html` was the reference and stays at `/legacy/` until removed.
 - Routes: `#/` home, `#/settings`, `#/p/<id>/<view>`.
 - Home: "Waiting for you" (every open question and terminal prompt across projects), active projects as cards (name, kind, agent, last activity, path, blocked reason, terminal prompt, moved-to link, Answer/Open button, Archive for ended tasks), archived projects behind a toggle.
 - Sidebar: All projects (total open questions), Settings, then active projects sorted by last activity with a status dot, kind and open-question count. On narrow screens it becomes a horizontal strip.
@@ -159,12 +159,12 @@ Stages: `specification` → `implementation` → `final-review` → `done`; `sto
 - Agents: grouped as Agent, Orchestrator, Developers, Reviewers (spec, functional, security), Final reviewers, Other; within a group ordered waiting, terminal, blocked, listening, working, idle, failed, done; each group's header counts statuses; finished agents greyed, never hidden. An agent with an open question gets an outline, a pulsing dot and a strip with the question and an Answer button.
 - Questions: triage questions first; option buttons, or option cards with their meaning when any option has one; an always-present "Talk about this" option that switches the comment box to a message box and the button to "Send to <agent>"; the thread above the options with "Waiting for <agent> to reply…"; "Accept the risk" relabels the comment box as a required reason; drafts survive re-renders; answered questions listed below.
 - Chat: agent header (status, CLI, session start or end, folder), remote-control switch (disabled without a session), session banner (terminal prompt, moved, listening), the log (bubbles; consecutive tool calls folded into one block), composer with a hint on when the message will be read, Ctrl/Cmd+Enter sends.
-- Specifications: tabs per spec with status dot, rendered markdown with Mermaid diagrams, decisions on that spec beside it, the spec-review card. Phases: per phase its goal, scope, covers, reviews (report readable inline) and findings; the spec review and the final review as their own blocks. Findings: unresolved or all, sorted by severity. Decisions table. Activity, newest first.
+- Specifications: documentation of the specs as they stand: tabs per spec with status dot, status, revision and the number of decisions that shaped it (linked to Decisions), rendered markdown with Mermaid diagrams. No reviews there. Phases & reviews: per phase its goal, scope, covers, reviews (report readable inline) and findings; the spec review (shown from the specification stage on, with its status) and the final review as their own blocks. Findings: unresolved or all, sorted by severity. Decisions table. Activity, newest first.
 - Settings: remote-control default; models for every role of every kind, grouped by stage, with unsaved markers, Save and Discard; the planned kinds listed.
 - Light and dark themes (system default, toggle remembered in `localStorage` key `lacarta-theme`), usable at 375 px wide.
 
 ### FR-21: Notifications
-- Priority: must. Status: **done in the legacy page; to do in Svelte**.
+- Priority: must. Status: **done** (Playwright: the live-update test).
 - For every non-archived project: a new question, an agent's reply in a "Talk about this" thread, a terminal prompt, an agent finishing its turn while listening. Shown as toasts (bottom right, at most four, red for triage and terminal prompts, staying until opened, dismissed, or the question is answered), and as system notifications when the tab is hidden and permission was given ("Enable alerts" button, shown only in a secure context with permission not yet asked). Nothing is announced for what existed when the page loaded. A finished-turn toast is skipped while the user is on that project's Chat. The tab title starts with the number of open questions.
 
 ### FR-22: Models per kind of project
@@ -172,7 +172,7 @@ Stages: `specification` → `implementation` → `final-review` → `done`; `sto
 - Settings hold a model alias (`opus`, `sonnet`, `haiku`, `fable`) for every role of every kind; agents read `models` before each spawn; `models --set role=alias` changes the current kind's role when the user asks in the terminal. Unknown kinds, roles or models are refused.
 
 ### FR-23: Live updates
-- Priority: should. Status: **to do (phase 3)**.
+- Priority: should. Status: **done** (`server_test.go: TestEvents`, Playwright: the live-update test).
 - The console receives change notices over server-sent events (`GET /api/events`) instead of polling; polling every 2.5 s remains the fallback.
 
 ### FR-24: Install
@@ -185,7 +185,7 @@ Stages: `specification` → `implementation` → `final-review` → `done`; `sto
 ## 5. User flows
 
 1. **Follow a session**: the user starts `claude` anywhere; the task appears on the home page; they open its Chat and watch; the agent asks a question; a toast appears; they answer; the listening session continues.
-2. **Drive remotely**: the agent finishes its turn; "finished its turn" toast; the user writes in Chat; the Stop hook delivers it; the agent works; repeat. Esc in the terminal takes the session back.
+2. **Drive remotely**: the agent finishes its turn; "finished its turn" toast; the user writes in Chat; the background listener returns and wakes the agent; the agent works and restarts the listener; repeat. The terminal stays usable throughout, and the user can type there too.
 3. **Build a project**: in a task the user asks for a new app; the agent loads the skill and runs `init`; the session moves to the new software project; specs are written, independently reviewed, approved; phases run with reviews; a high finding stops work until the user triages it; the final review closes the project.
 
 ## 6. Data
@@ -202,7 +202,7 @@ See architecture §3. Retention: activity keeps the last 300 events per project,
 | NFR-4 | Concurrency | CLI, hooks and daemon can write the same project at once without losing writes | advisory locks + atomic replace; review |
 | NFR-5 | Performance | PostToolUse with nothing queued only reads the state (no lock contention); the console stays responsive with transcripts of several MB (incremental reading) | review; manual |
 | NFR-6 | Footprint | One static binary, no runtime dependencies; the console works offline (vendored libraries) | build; manual |
-| NFR-7 | Accessibility | The console is keyboard-usable, labelled for screen readers, readable in both themes, honours reduced motion | manual (phase 3 checklist) |
+| NFR-7 | Accessibility | The console is keyboard-usable, labelled for screen readers, readable in both themes, honours reduced motion | Partly: the Playwright tests find every control by its accessible role and label; keyboard-only use and a screen reader **not yet checked by hand** |
 
 ## 8. Assumptions and open questions
 

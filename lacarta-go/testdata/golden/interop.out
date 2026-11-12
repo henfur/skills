@@ -119,14 +119,14 @@ Phase 1 started.
 [exit 0]
 
 $ agent start --role implementation --task "Build « Écrans »" --phase 1
-A-2 Basil: implementation on Opus 5.5 (Agent tool model: opus).
-Tell the subagent its name is Basil and to run every lacarta command as `<L> --agent A-2 <command>`.
+A-2 Sam: implementation on Opus 5.5 (Agent tool model: opus).
+Tell the subagent its name is Sam and to run every lacarta command as `<L> --agent A-2 <command>`.
 When it returns: `agent done A-2 --summary "..."` (or `--failed`).
 [exit 0]
 
 % agent list
   A-1   Ada        orchestrator             opus    working  Runs the framework and talks to you.
-  A-2   Basil      implementation           opus    working  Build Â« Ãcrans Â»
+  A-2   Sam        implementation           opus    working  Build Â« Ãcrans Â»
 [exit 0]
 
 $ --agent A-2 ask --title "Couleur ?" --option "Bleu|Calme" --option "Rouge|Vif"

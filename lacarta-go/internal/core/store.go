@@ -220,8 +220,12 @@ func NewAgent(st *State, role, task string, phase *PhaseRef, logIt bool) *Agent 
 		used[a.Name] = true
 	}
 	n := len(st.Agents)
-	name := fmt.Sprintf("%s %d", AgentNames[n%len(AgentNames)], n/len(AgentNames)+1)
-	for _, x := range AgentNames {
+	names := AgentNames[1:] // the first name is the orchestrator's alone
+	if n == 0 {
+		names = AgentNames
+	}
+	name := fmt.Sprintf("%s %d", names[n%len(names)], n/len(names)+1)
+	for _, x := range names {
 		if !used[x] {
 			name = x
 			break
@@ -316,4 +320,19 @@ func PIDAlive(pid int) bool {
 	return syscall.Kill(pid, 0) == nil
 }
 
-func IsListening(st *State) bool { return st.Listening != nil && PIDAlive(st.Listening.PID) }
+// ListenerAlive: a `lacarta listen` process is waiting for the console on the agent's behalf.
+func ListenerAlive(st *State) bool { return st.Listening != nil && PIDAlive(st.Listening.PID) }
+
+// IsListening: the agent's turn has ended and its listener is running, so a message from the
+// console starts its next turn. The console shows it as "listening".
+func IsListening(st *State) bool {
+	if !ListenerAlive(st) {
+		return false
+	}
+	for _, a := range st.Agents {
+		if a.ID == Orchestrator {
+			return a.Status == "idle"
+		}
+	}
+	return false
+}

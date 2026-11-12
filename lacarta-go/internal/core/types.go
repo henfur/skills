@@ -204,6 +204,8 @@ type InboxMsg struct {
 	DeliveredAt *string `json:"delivered_at"`
 }
 
+// Listening is the agent's background listener (`lacarta listen`). Since is when the agent's
+// last turn ended (the console announces each one); PID is the listener's process.
 type Listening struct {
 	Since string `json:"since"`
 	PID   int    `json:"pid"`

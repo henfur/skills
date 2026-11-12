@@ -147,10 +147,11 @@ func (k Kind) Role(id string) (Role, bool) {
 	return Role{}, false
 }
 
-// Agents get a human name so the user knows who is asking. The orchestrator is always A-1.
-var AgentNames = []string{"Ada", "Basil", "Cleo", "Dorian", "Esme", "Felix", "Gaia", "Hugo", "Iris", "Jonah",
-	"Kira", "Leon", "Mira", "Nico", "Opal", "Pavel", "Quinn", "Rosa", "Silas", "Tess",
-	"Ugo", "Vera", "Wren", "Xavi", "Yara", "Zeno"}
+// Agents are named after Totally Spies characters so the user knows who is asking. The first
+// name goes to the orchestrator, A-1, so it is always Jerry. The console draws a portrait for
+// each of these names (web/app/src/lib/portraits.js); keep the two lists in step.
+var AgentNames = []string{"Jerry", "Sam", "Clover", "Alex", "Britney", "Blaine", "Mandy", "Arnold", "Dean",
+	"Mike", "Gladis", "Caitlin", "Dominique", "Tim", "Terrence", "Helga", "Geraldine", "Gus"}
 
 // What each fixed choice does, shown under the option in the console.
 var ApprovalHelp = map[string]string{

@@ -9,7 +9,7 @@ Status: phases 1 and 2 done, 2026-11-12. Taking over? Start with [`next-steps.md
 | 0. Open assumptions | Mostly settled (table below). Fallback in place for the env file: the session context names `--project <id>` |
 | 1. State, gates, CLI | **Done** in `lacarta-go/`: every agent-facing command; parity proven by the golden suite (six scenarios, about 1,300 lines of output identical to the prototype, including one scenario where Go and Python alternate on the same files) |
 | 2. Hooks, install, daemon API | **Done**: every hook event in the golden suite; listening Stop hook, SIGTERM cleanup, transcript reader and install covered by Go tests; the API answers exactly like the prototype's daemon on the same state files; the console page is the prototype's, embedded unchanged. Not exercised: a hook starting the daemon itself (it would take port 4747) |
-| 3. Svelte console | Not started (Bun is not installed on this machine yet) |
+| 3. Svelte console | **Done** in `web/app/` (built into `web/dist/`, embedded): every view, live updates over `/api/events`, no inline script (strict CSP), 10 Playwright tests in Chromium. Left: remove the legacy page (still at `/legacy/`) once the user has checked the new console |
 | 4. Skill split, releases | Not started; spec templates are already embedded in the binary |
 | 5. First new kind | Not started |
 
@@ -144,7 +144,7 @@ Claude Code adapter, behaviour as in the prototype:
 | UserPromptSubmit | 15 s | clear attention; agent working; name a single task after its first prompt |
 | PostToolUse (`*`) | 15 s | if messages are queued: mark delivered, add them as context. Cheap path: read only, no lock, when nothing is queued |
 | Notification | 15 s | set attention ("needs you in the terminal") |
-| Stop | 86400 s | deliver queued messages as a block reason; else, with remote control on, listen: record `listening {since, pid}`, poll (or watch) for a message, an answer, or a "Talk about this" message; give up after 23 h; always clear `listening` on exit, including SIGTERM |
+| Stop | 86400 s (**replaced**: now 30 s and never waits; a background `lacarta listen` does the waiting, see architecture AD-4) | deliver queued messages as a block reason; else, with remote control on, listen: record `listening {since, pid}`, poll (or watch) for a message, an answer, or a "Talk about this" message; give up after 23 h; always clear `listening` on exit, including SIGTERM |
 | SessionEnd | 15 s | close the session; a single task ends and its open questions are withdrawn |
 
 Any hook registers an unknown session on first contact (sessions started before `install`).

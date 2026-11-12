@@ -71,6 +71,9 @@ func commands() []*Cmd {
 		{Name: "hook", Help: "Called by the CLI's hooks, with its JSON on stdin.", Run: cmdHook,
 			Pos: []Pos{{Name: "event", Choices: hookEvents()}}},
 		{Name: "inbox", Help: "Read the messages the user sent from the console (CLIs without hooks).", Run: cmdInbox},
+		{Name: "listen", Help: "Wait for the user in the console: returns when they write, answer or ask about a question. " +
+			"Run it as a background command; the terminal stays free.", Run: cmdListen,
+			Opts: []Opt{{Name: "timeout", Kind: num, Help: "Seconds before giving up; 0 waits forever."}}},
 		{Name: "spec submit", Help: "Ask the user to approve one spec.", Run: cmdSpecSubmit,
 			Pos: []Pos{{Name: "kind", Choices: specKeys()}}, Opts: []Opt{{Name: "note", Help: "What changed or what to look at (markdown)."}}},
 		{Name: "plan submit", Help: "Ask the user to approve the phase plan.", Run: cmdPlanSubmit},
@@ -265,6 +268,10 @@ func cmdServe(a *Args) error {
 		port = a.Int("port")
 	}
 	return server.Serve(firstNonEmpty(a.Str("host"), "127.0.0.1"), port, a.List("allow-host"), a.Out)
+}
+
+func cmdListen(a *Args) error {
+	return hooks.Listen(store, a.Out, time.Duration(a.Int("timeout"))*time.Second)
 }
 
 func cmdInstall(a *Args) error { return hooks.Install(a.Str("settings"), a.Flag("uninstall"), a.Out) }

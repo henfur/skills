@@ -7,20 +7,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
-	"syscall"
 	"time"
 
 	"lacarta/internal/core"
 )
 
-// ListenMax: a listening Stop hook gives up before its 24 h hook timeout.
-var ListenMax = 23 * time.Hour
-
-// PollEvery is how often a listening Stop hook looks for news.
+// PollEvery is how often `lacarta listen` looks for news.
 var PollEvery = time.Second
 
 // Self is the command that runs this binary, for the context given to agents.
@@ -38,6 +33,7 @@ type Payload struct {
 	Prompt         string `json:"prompt"`
 	Message        string `json:"message"`
 	Reason         string `json:"reason"`
+	StopHookActive bool   `json:"stop_hook_active"` // this stop follows a block by a Stop hook
 }
 
 var Events = map[string]func(*Payload, io.Writer) error{
@@ -157,6 +153,11 @@ func sessionContext(pid string, s *core.Store) (string, error) {
 			"from the terminal, ask in the console: `%s ask --title \"...\" --option \"Label|what it means\"`, then run "+
 			"`%s wait` as a background command.", Self, Self))
 	}
+	if core.RemoteOn(st) {
+		lines = append(lines, fmt.Sprintf("Remote control is on: at your first turn, start `%s listen` as a background "+
+			"command and leave it running. It returns when the user writes from the console, answers a question or asks "+
+			"about one; act on what it prints, then start it again. The user can keep typing in this terminal meanwhile.", Self))
+	}
 	if qs := core.OpenQuestions(st); len(qs) > 0 {
 		ids := make([]string, len(qs))
 		for i, q := range qs {
@@ -252,94 +253,44 @@ func notification(p *Payload, w io.Writer) error {
 	})
 }
 
-// stop ends a turn: it delivers console messages, or keeps listening for one (remote control).
+// stop ends a turn. It never waits: queued console messages are handed to the agent at once;
+// otherwise, with remote control on, a background `lacarta listen` keeps watching the console
+// while the terminal stays free. If none runs, the agent is asked once to start it.
 func stop(p *Payload, w io.Writer) error {
 	s, err := sessionStore(p)
 	if err != nil {
 		return err
 	}
 	var msg string
-	var listen bool
-	answered, threads := map[string]bool{}, map[string]int{}
+	var askListener bool
 	err = s.Edit(func(st *core.State) error {
 		st.Attention = nil
 		a := core.MustAgent(st, core.Orchestrator)
 		msg = core.TakeMessages(st)
-		listen = msg == "" && core.RemoteOn(st) && st.Stage != "ended" && st.Stage != "done"
 		a.Status, a.UpdatedAt = "idle", core.Now()
 		if msg != "" {
 			a.Status = "working"
 		}
-		if listen {
-			st.Listening = &core.Listening{Since: core.Now(), PID: os.Getpid()}
-		}
-		for _, q := range st.Questions {
-			if q.Status != "open" {
-				answered[q.ID] = true
-			}
-			threads[q.ID] = len(q.Thread)
+		active := st.Stage != "ended" && st.Stage != "done"
+		if core.ListenerAlive(st) {
+			st.Listening.Since = core.Now() // the console announces each finished turn
+		} else {
+			st.Listening = nil
+			askListener = msg == "" && active && core.RemoteOn(st) && !p.StopHookActive
 		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	if msg != "" || !listen {
+	switch {
+	case msg != "":
 		printBlock(w, msg)
-		return nil
+	case askListener:
+		printBlock(w, fmt.Sprintf("%s Remote control is on for this project but no listener is running. Start `%s listen` "+
+			"as a background command (it returns when the user writes from the console, answers a question or asks "+
+			"about one), then end your turn. Do nothing else.", core.ConsoleTag, Self))
 	}
-	// Esc in the CLI terminates a listening hook: unwind so it stops showing as listening.
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-	defer signal.Stop(sigs)
-	reason, deadline := "", time.Now().Add(ListenMax)
-	defer func() {
-		_ = s.Edit(func(st *core.State) error {
-			st.Listening = nil
-			if reason != "" {
-				a := core.MustAgent(st, core.Orchestrator)
-				a.Status, a.UpdatedAt = "working", core.Now()
-			}
-			return nil
-		})
-	}()
-	tick := time.NewTicker(PollEvery)
-	defer tick.Stop()
-	for reason == "" && time.Now().Before(deadline) {
-		select {
-		case <-sigs:
-			return nil
-		case <-tick.C:
-		}
-		st, err := s.Read()
-		if err != nil {
-			return err
-		}
-		if !core.RemoteOn(st) {
-			break
-		}
-		if len(core.PendingMessages(st)) > 0 {
-			if err := s.Edit(func(st *core.State) error { reason = core.TakeMessages(st); return nil }); err != nil {
-				return err
-			}
-			break
-		}
-		news := []string{}
-		for _, q := range st.Questions {
-			if !answered[q.ID] && q.Status == "answered" {
-				ans, _ := core.PyDumpsValue(q.Answer)
-				news = append(news, fmt.Sprintf("%s (%s) was answered: %s", q.ID, q.Title, ans))
-			} else if core.Discussing(q) && len(q.Thread) > threads[q.ID] {
-				news = append(news, fmt.Sprintf("On %s (%s) the user chose \"Talk about this\" and wrote: %s\nReply with "+
-					"`reply %s --message ...`; it is not answered.", q.ID, q.Title, q.Thread[len(q.Thread)-1].Text, q.ID))
-			}
-		}
-		if len(news) > 0 {
-			reason = core.ConsoleTag + " Activity in the lacarta console (a background `wait` may report the same " +
-				"thing; it is the same event):\n\n" + strings.Join(news, "\n\n")
-		}
-	}
-	printBlock(w, reason)
 	return nil
 }
 

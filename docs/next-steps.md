@@ -14,8 +14,8 @@ Written 2026-11-12, for the agent taking over the Go port. Read in this order:
 | 0. Check Claude Code assumptions | Mostly settled; two unknowns have fallbacks (see the plan's table) |
 | 1. State, gates, CLI in Go | Done |
 | 2. Hooks, install, daemon API in Go | Done |
-| 3. Svelte console | **Next** |
-| 4. Skill split, releases, retire Python | After 3 |
+| 3. Svelte console | Done, except removing the legacy page after the user has checked the new one |
+| 4. Skill split, releases, retire Python | **Next** |
 | 5. `Kind` interface + security-audit kind | After 4 |
 
 - `lacarta-go/` is a complete replacement for the Python prototype `lacarta/scripts/lacarta.py`: same commands, hooks, API and state files. Its console is the prototype's page, embedded unchanged from `lacarta-go/web/legacy/`.
@@ -41,44 +41,28 @@ go vet ./... && go test ./...          # all green at handoff
 - **Hooks never fail the session.** They log to `~/.lacarta/hooks.log` and exit 0.
 - **The prototype is frozen.** Don't add features to `lacarta.py`. If behaviour must change before phase 4, change Go, re-record the affected scenarios with Go (see "After the prototype is gone" below), and note it.
 
-## Phase 3: Svelte console
+## Phase 3: Svelte console (done, one step left)
 
-Goal: replace `web/legacy/index.html` with a Svelte app, with the same features, in both themes and at phone width.
+Built in `lacarta-go/web/app/` (Svelte 5.57, Vite 6.4, built with Bun 1.4 from nixpkgs), output committed in `web/dist/` and embedded, so `go build` needs no Bun. What changed, beyond porting every view:
 
-1. **Toolchain.** Bun isn't installed; this is NixOS: `nix shell nixpkgs#bun`, or add a `flake.nix` / `shell.nix` to `lacarta-go/` with `go` and `bun`. Svelte 5 + Vite, no SvelteKit (Go serves the pages and the API). Put the source in `lacarta-go/web/app/`, build to `lacarta-go/web/dist/`, and embed `dist` in `web/embed.go`. Decide whether `dist/` is committed (it is simplest for `go install` users) or built by a `go generate` step. Write the choice down in the README.
-2. **API: no change needed.** The page uses `GET /api/hub`, `GET /api/p/{id}/state`, `POST /api/p/{id}/{answer,discuss,message,remote,archive}`, `POST /api/settings`, and the token injected as `const TOKEN = "__LACARTA_TOKEN__"` (replaced in `server.Handler`). Keep injecting the token into `index.html` the same way, and keep every request's `X-Lacarta-Token` header and same-origin POSTs.
-3. **Live updates.** Add `GET /api/events` (server-sent events) to `internal/server`: send `hub` and `project:{id}` notices when state files change. The module has no dependencies so far. Either poll file modification times every 500 ms in the daemon (stdlib only, fine at this scale) or add `github.com/fsnotify/fsnotify`. Polling is the simpler and recommended choice. Keep the 2.5 s fetch loop as a fallback in the client.
-4. **Port the views**, using the prototype page as the reference (`web/legacy/index.html`; its functions are named after the views):
-   - Home: projects, "waiting for you", archive and restore.
-   - Settings: models per kind, remote-control default, the planned kinds.
-   - Single-agent overview.
-   - Chat: transcript, queued and delivered console messages, tool calls folded into blocks, remote-control switch, Ctrl+Enter to send.
-   - Questions: option help, the "Talk about this" thread, triage styling, "Accept the risk" requiring a reason.
-   - Software overview: stages, stats, agents grouped by role with the asking strip.
-   - Specifications with Mermaid (lazy-loaded from the embedded vendor file), phases and reviews, findings, decisions, activity.
-   - Notifications: toasts, system notifications, the open-question count in the tab title, the agent card flashing on a new question.
-   - Keep the colour tokens and the light and dark themes from the legacy page's `:root` block.
-5. **Keep behaviour, drop the workarounds.** The legacy page skips re-rendering while you type, restores the chat's scroll position by hand, and works out by hand what changed for notifications. Svelte's reactivity replaces all three; the behaviour must stay.
-6. **Tests.** Add Playwright smoke tests (via Bun) against a Go daemon on a temp `LACARTA_HOME` and a free port: answer a question, "Talk about this", send a chat message, change a model in Settings, archive a task. Check both themes and 375 px width by hand, then write down what you checked.
-   Where each view lives in the legacy page (`web/legacy/index.html`):
+- **Same look**: `src/app.css` is the legacy page's stylesheet, unchanged, plus a short "Fixes" block at the end. Components emit the same markup and classes.
+- **Token in `<meta name="lacarta-token">`**: the page has no inline script, so `/` is served with `script-src 'self'` (the legacy page keeps its own CSP at `/legacy/`).
+- **Live updates**: `GET /api/events` (`internal/server/events.go`): a watcher compares state-file modification times every 500 ms while someone is subscribed and sends `hub` and `project` events; the key may come as `?key=` because EventSource sends no headers. The page re-fetches on each event and polls every 15 s while the stream is healthy, every 2.5 s otherwise.
+- **Fixed on the way**: drafts are keyed by project and question (question ids repeat across projects); a long session folder no longer widens the chat at phone width; the page no longer fetches the state of a project the hub doesn't list.
+- **Development**: `LACARTA_WEB_DIR=web/dist lacarta serve --port 4799` (scratch `LACARTA_HOME`) serves the build from disk; `bun run build --watch` in `web/app/` then needs no Go rebuild.
+- **Tests**: `web/app/tests/console.spec.js`, 10 Playwright smoke tests in Chromium against a daemon seeded by `tests/seed.sh` through the real CLI and hooks: home, answering, triage with Talk about this, chat, settings, archive, live updates with a toast, Mermaid, every view, dark theme and 375 px width. Every test fails on any console error, which includes CSP violations. Run them on NixOS with:
 
-   | Area | Functions (line at handoff) |
-   | --- | --- |
-   | Colour tokens, light and dark themes | `:root` (13) and the two dark-mode blocks below it |
-   | Routing, sidebar, tabs, render loop | `VIEWS` (462), `parseRoute` (476), `renderNav` (492), `projectTabs` (507), `render` (524) |
-   | Home | `viewHome` (981), `bindHome` (1017), `projectStatus` (486) |
-   | Software overview, agents | `viewOverview` (570), `agentsSection` (631), `AGENT_GROUPS` (621), `STATUS_ORDER` (629), `AGENT_STATUS` (440) |
-   | Single-agent overview, session banner | `viewSingleOverview` (1036), `sessionBanner` (1028) |
-   | Questions, Talk about this | `viewQuestions` (681), `questionCard` (719), `threadView` (705), `replier` (699), `bindQuestions` (750), `send` (761) |
-   | Chat | `viewChat` (1061), `chatBubble` (1053), `bindChat` (1099) |
-   | Specs, phases, findings, decisions, activity | `viewSpecs` (795), `specReviewCard` (782), `viewPhases` (845), `reviewRow` (832), `findingRow` (839), `viewFindings` (876), `viewDecisions` (892), `activityRows` (905), `viewActivity` (1123) |
-   | Settings | `viewSettings` (909), `saveSettings` (950), `bindSettings` (963) |
-   | Polling and notifications | `poll` (1127), `tick` (1234), `hubEvents` (1163), `notifyChanges` (1176), `showToast` (1203), `setupNotifyButton` (1227) |
-   | Mermaid | `loadMermaid` (1245), `configureMermaid` (1263), `renderDiagrams` (1295) |
+  ```bash
+  cd lacarta-go/web/app
+  BR=$(nix build --no-link --print-out-paths nixpkgs#playwright-driver.browsers)
+  nix shell nixpkgs#bun -c env PLAYWRIGHT_BROWSERS_PATH=$BR PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true bunx playwright test
+  ```
 
-7. **Switch over** when the parity list is done: serve `dist/`, delete `web/legacy/` (keep the vendored `marked`, `DOMPurify` and `mermaid` files, or replace them with npm packages bundled by Vite), update the README.
+  `@playwright/test` is pinned to 1.64.1, the version of nixpkgs' `playwright-driver`; keep them equal.
 
-Exit: the parity list above checked, Playwright green, `go test ./...` green.
+**Left to do:**
+1. **The user checks the new console** in their own browser (a rebuilt binary on their machine, or a scratch daemon). The automated tests ran Chromium only: Firefox and Safari are unchecked, and nobody has looked at it with human eyes yet.
+2. Then **remove the legacy page**: delete `web/legacy/`, the `Legacy` embed, the `/legacy/` and `/vendor/` routes and `cspLegacy` in `internal/server/server.go`, and the legacy assertions in `TestPageHasToken` / `TestAuth` (vendored scripts). `web/legacy/index.html` is still the reference for behaviour until then.
 
 ## Phase 4: skill split, releases, retire Python
 
@@ -97,13 +81,48 @@ Exit: a clean machine goes from install to an approved phase 1 of a new project,
 
 ## Phase 5: `Kind` interface and the security-audit kind
 
+**Design draft:** [`lacarta-go/docs/design/security-audit.md`](../lacarta-go/docs/design/security-audit.md) covers the audit kind built on [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) (required to start an audit), plugins enabled per project, and the implementation order. The user decided O-2 to O-5 (output under `~/.lacarta/audits/`, coverage-plan review always, no fixing: the deliverable is a report the human auditor approves, gitleaks and osv-scanner as day-one plugins). Then O-6 and O-7 (the auditor signs with their name; severity changes appear in the report) and an AI-assistance disclosure with tamper-evident provenance (§4.8). Still open: O-1 (technical). O-8 and O-9 are parked: see "Later improvements" below.
+
 Phase 1 kept the prototype's shape: functions in `internal/core/workflow.go` and `internal/cli/commands.go` branch on `st.Template`. Extract the interface sketched in the plan (`Roles`, `Commands`, `Refresh`, `NextAction`, `Derived`) once a second real kind shows what it must cover. Build the security-audit kind on it, with its own skill instructions and console views. Exit: added without editing `state`, `hub`, `hooks` or `server` code paths beyond registering the kind.
+
+## Later improvements: report provenance
+
+Both are parked by the user for later. They build on the security-audit design's §4.8 (AI-assistance disclosure and provenance);
+the first version ships without them: disclosure in the template, PDF watermark, XMP/front-matter marking and the signed
+manifest (`report.provenance.json`, Ed25519 in SSHSIG format).
+
+1. **O-8: public timestamp of approved reports.** At approval, record the provenance manifest's hash in a public transparency
+   log (Sigstore Rekor) or get an RFC 3161 timestamp from a timestamp authority. It proves, independently of the auditor, that a
+   report with this id and `ai_assisted: true` existed at that time; it is the only layer an auditor can't redo on their own
+   machine. It sends a hash and the public key off the machine (never the report), so it is outward-facing: to decide with the
+   user whether it is off, on by default or required, and to confirm before the first use.
+2. **O-9: PDF certification signature without a dependency.** A PAdES certification signature with DocMDP level 1 ("no
+   changes allowed") makes PDF readers flag any later edit; with a self-signed certificate the signer shows as untrusted but
+   changes are still detected. It needs CMS (PKCS#7) SignedData, which the Go standard library lacks. Proposed: implement the
+   small subset with `encoding/asn1` and `crypto/x509` rather than take the binary's first third-party dependency. Test the result
+   in the readers clients use (Adobe Reader at least): validators differ on incremental updates such as later timestamps.
+   Revisit **C2PA Content Credentials** at the same time: it has a PDF binding, but the reference SDK documented PDF as read
+   support only when this was designed.
+
+Sources:
+- [EU AI Act Article 50: a practical guide](https://artificialintelligenceact.eu/transparency-rules-article-50/) and
+  [Orrick: EU AI Act transparency obligations for AI-generated content](https://www.orrick.com/en/insights/2026/08/EU-AI-Act-Transparency-Obligations-for-AI-Generated-Content-Article-50)
+  (machine-readable marking; recital 133 lists watermarks, metadata, cryptographic provenance and logging as techniques).
+- [Adobe: certificate-based signatures](https://helpx.adobe.com/acrobat/current/certificate-based-signatures.html),
+  [Nutrient: certify a PDF document](https://www.nutrient.io/guides/java/editor/certify-a-pdf-document/) and
+  [Attacks on PDF certification, and what you can do about them](https://idm.net.au/node/13529) (DocMDP levels, self-signed
+  certificates, known viewer differences).
+- [C2PA specification 2.3](https://spec.c2pa.org/specifications/specifications/2.3/specs/_attachments/C2PA_Specification.pdf),
+  [C2PA Rust SDK](https://docs.rs/crate/c2pa/0.85.2/source/src/lib.rs) and
+  [Content Authenticity for PDF (PDF Association)](https://pdfa.org/wp-content/uploads/2021/05/Content-Authenticity-for-PDF.pdf).
+- [Build your own vulnerability harness (Cloudflare)](https://blog.cloudflare.com/build-your-own-vulnerability-harness) and
+  [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), the basis of the audit design.
 
 ## Open decisions for the user
 
 - **The console key in transcripts:** when the console listens beyond loopback, the session context includes the URL with `?key=`, so it ends up in `~/.claude` transcripts. Leave it there, or put the URL without the key in the context.
 - **Several sessions on one software project:** today the last session to start becomes A-1's session. Decide before the security-audit kind, where parallel agents are likely.
-- **Remote control on by default** holds the terminal at the end of every turn. The user chose this; revisit if it surprises them.
+- **Remote control on by default:** it no longer holds the terminal. The agent runs `lacarta listen` as a background command, which wakes it when the console has something; revisit if that surprises the user.
 
 ## Known gaps and gotchas
 

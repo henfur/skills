@@ -201,7 +201,7 @@ var claudeEvents = []struct {
 	{"UserPromptSubmit", event{"prompt", 15, ""}},
 	{"PostToolUse", event{"post-tool", 15, "*"}},
 	{"Notification", event{"notification", 15, ""}},
-	{"Stop", event{"stop", 86400, ""}},
+	{"Stop", event{"stop", 30, ""}}, // never waits: `lacarta listen` does, in the background
 	{"SessionEnd", event{"session-end", 15, ""}},
 }
 

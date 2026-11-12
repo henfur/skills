@@ -227,8 +227,8 @@ stderr: Refused: Phase 1 is in-progress.
 [exit 2]
 
 $ agent start --role security_review --task "Review phase 1" --phase 1
-A-2 Basil: security review on Opus 5.5 (Agent tool model: opus).
-Tell the subagent its name is Basil and to run every lacarta command as `<L> --agent A-2 <command>`.
+A-2 Sam: security review on Opus 5.5 (Agent tool model: opus).
+Tell the subagent its name is Sam and to run every lacarta command as `<L> --agent A-2 <command>`.
 When it returns: `agent done A-2 --summary "..."` (or `--failed`).
 [exit 0]
 
@@ -366,11 +366,11 @@ A-2 done.
 [exit 0]
 
 $ agent done A-2
-stderr: Refused: Basil is already done.
+stderr: Refused: Sam is already done.
 [exit 2]
 
 $ --agent A-2 ask --title "Too late"
-stderr: Refused: Basil (A-2) is done; start a new agent with `agent start`.
+stderr: Refused: Sam (A-2) is done; start a new agent with `agent start`.
 [exit 2]
 
 $ phase complete 1 --summary "Invoices can be created through the API."
@@ -665,12 +665,12 @@ $ decisions
 [exit 0]
 
 $ agent list
-  A-1   Ada        orchestrator             opus    done     Runs the framework and talks to you.
-  A-2   Basil      security_review          opus    done     Review phase 1
+  A-1   Jerry      orchestrator             opus    done     Runs the framework and talks to you.
+  A-2   Sam        security_review          opus    done     Review phase 1
 [exit 0]
 
-$ agent rename A-2 --name Ada
-stderr: Refused: Ada is taken.
+$ agent rename A-2 --name Jerry
+stderr: Refused: Jerry is taken.
 [exit 2]
 
 $ agent rename A-2 --name Bea
@@ -682,7 +682,7 @@ A-1 updated.
 [exit 0]
 
 $ agent list
-  A-1   Ada        orchestrator             opus    done     Wrapping up
+  A-1   Jerry      orchestrator             opus    done     Wrapping up
   A-2   Bea        security_review          opus    done     Review phase 1
 [exit 0]
 

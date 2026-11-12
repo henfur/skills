@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -223,42 +225,86 @@ type Config struct {
 // On loopback the page is open and only changes need the token. Bound to any other address,
 // every request but the vendored scripts needs the token too (from `?key=` on the page URL,
 // then the X-Lacarta-Token header), since anyone on the network can reach it.
-func Handler(c Config) http.Handler {
-	allowed := map[string]bool{}
+func Handler(c Config) http.Handler { return NewConsole(c) }
+
+// Console is the daemon's HTTP handler; Close ends the live-update streams.
+type Console struct {
+	c       Config
+	allowed map[string]bool
+	events  *broker
+}
+
+func NewConsole(c Config) *Console {
+	con := &Console{c: c, allowed: map[string]bool{}, events: newBroker()}
 	for h := range loopback {
-		allowed[urlHost(h)+":"+strconv.Itoa(c.Port)] = true
+		con.allowed[urlHost(h)+":"+strconv.Itoa(c.Port)] = true
 	}
 	for _, h := range c.ExtraHosts {
-		allowed[urlHost(h)+":"+strconv.Itoa(c.Port)] = true
+		con.allowed[urlHost(h)+":"+strconv.Itoa(c.Port)] = true
 	}
-	page, _ := web.Legacy.ReadFile("legacy/index.html")
-	html := strings.ReplaceAll(string(page), "__LACARTA_TOKEN__", c.Token)
-	keyOK := func(v string) bool {
-		return !c.RequireKey || subtle.ConstantTimeCompare([]byte(v), []byte(c.Token)) == 1
+	return con
+}
+
+func (con *Console) Close() { con.events.close() }
+
+// The Svelte build has no inline script (the token comes in a <meta> tag), so scripts are
+// limited to the page's own files. The prototype's page, at /legacy/, still needs inline scripts.
+const (
+	cspBase = "default-src 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+		"font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; base-uri 'none'; " +
+		"form-action 'none'; frame-ancestors 'none'; "
+	cspApp    = cspBase + "script-src 'self'"
+	cspLegacy = cspBase + "script-src 'self' 'unsafe-inline'"
+)
+
+func (con *Console) keyOK(v string) bool {
+	return !con.c.RequireKey || subtle.ConstantTimeCompare([]byte(v), []byte(con.c.Token)) == 1
+}
+
+func (con *Console) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h := w.Header()
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Cache-Control", "no-store")
+	h.Set("Content-Security-Policy", cspApp)
+	// Refuse DNS rebinding: only the host names we were started for are served.
+	if con.c.CheckHost && !con.allowed[r.Host] {
+		fail(w, 403, "Host not allowed. Add it with `serve --allow-host`.")
+		return
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "no-referrer")
-		h.Set("Cache-Control", "no-store")
-		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' "+
-			"'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; "+
-			"img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
-		// Refuse DNS rebinding: only the host names we were started for are served.
-		if c.CheckHost && !allowed[r.Host] {
-			fail(w, 403, "Host not allowed. Add it with `serve --allow-host`.")
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			get(w, r, html, keyOK)
-		case http.MethodPost:
-			post(w, r, c.Token)
-		default:
-			fail(w, 405, "Method not allowed.")
-		}
-	})
+	switch r.Method {
+	case http.MethodGet:
+		con.get(w, r)
+	case http.MethodPost:
+		post(w, r, con.c.Token)
+	default:
+		fail(w, 405, "Method not allowed.")
+	}
+}
+
+// site is the console's files: the embedded build, or LACARTA_WEB_DIR while developing it.
+func site() (fs.FS, bool) {
+	if dir := os.Getenv("LACARTA_WEB_DIR"); dir != "" {
+		return os.DirFS(dir), true
+	}
+	sub, _ := fs.Sub(web.Dist, "dist")
+	return sub, false
+}
+
+func (con *Console) page(w http.ResponseWriter, r *http.Request, files fs.FS, name, csp string) {
+	if !con.keyOK(r.URL.Query().Get("key")) {
+		fail(w, 403, "Missing or wrong key. Open the URL `serve` printed.")
+		return
+	}
+	b, err := fs.ReadFile(files, name)
+	if err != nil {
+		fail(w, 500, "The console is missing from this build: "+err.Error())
+		return
+	}
+	w.Header().Set("Content-Security-Policy", csp)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = io.WriteString(w, strings.ReplaceAll(string(b), "__LACARTA_TOKEN__", con.c.Token))
 }
 
 func send(w http.ResponseWriter, code int, v any) {
@@ -288,8 +334,30 @@ func projectPath(path string) (pid, action string) {
 	return parts[3], parts[4]
 }
 
-func get(w http.ResponseWriter, r *http.Request, html string, keyOK func(string) bool) {
+func (con *Console) get(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	files, dev := site()
+	if strings.HasPrefix(path, "/assets/") {
+		// Built files have content-hashed names: cache them for good (not while developing).
+		name := strings.TrimPrefix(path, "/")
+		b, err := fs.ReadFile(files, name)
+		if err != nil || strings.Contains(path, "..") {
+			fail(w, 404, "Not found.")
+			return
+		}
+		if !dev {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		if t := mime.TypeByExtension(filepath.Ext(name)); t != "" {
+			w.Header().Set("Content-Type", t)
+		}
+		_, _ = w.Write(b)
+		return
+	}
+	if path == "/legacy" || path == "/legacy/" {
+		con.page(w, r, web.Legacy, "legacy/index.html", cspLegacy)
+		return
+	}
 	if strings.HasPrefix(path, "/vendor/") {
 		b, err := web.Legacy.ReadFile("legacy" + path)
 		if err != nil || strings.Contains(path, "..") {
@@ -303,15 +371,19 @@ func get(w http.ResponseWriter, r *http.Request, html string, keyOK func(string)
 		return
 	}
 	if path == "/" {
-		if !keyOK(r.URL.Query().Get("key")) {
+		con.page(w, r, files, "index.html", cspApp)
+		return
+	}
+	if path == "/api/events" {
+		// EventSource can't send headers: the key may come in the query.
+		if !con.keyOK(r.Header.Get("X-Lacarta-Token")) && !con.keyOK(r.URL.Query().Get("key")) {
 			fail(w, 403, "Missing or wrong key. Open the URL `serve` printed.")
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, html)
+		con.events.serve(w, r)
 		return
 	}
-	if !keyOK(r.Header.Get("X-Lacarta-Token")) {
+	if !con.keyOK(r.Header.Get("X-Lacarta-Token")) {
 		fail(w, 403, "Missing or wrong key. Open the URL `serve` printed.")
 		return
 	}
@@ -530,8 +602,9 @@ func Serve(host string, port int, allowHosts []string, out io.Writer) error {
 		fmt.Fprintln(out, "Reachable from the network. Keep the key private: anyone holding the URL can answer for you. "+
 			"Traffic is plain HTTP; prefer a trusted network or an SSH tunnel.")
 	}
-	srv := &http.Server{Handler: Handler(Config{Token: token, Port: port, ExtraHosts: extra, RequireKey: exposed, CheckHost: check}),
-		ReadHeaderTimeout: 10 * time.Second}
+	con := NewConsole(Config{Token: token, Port: port, ExtraHosts: extra, RequireKey: exposed, CheckHost: check})
+	srv := &http.Server{Handler: con, ReadHeaderTimeout: 10 * time.Second}
+	srv.RegisterOnShutdown(con.Close) // live-update streams would otherwise hold the shutdown
 	ctx, cancel := signalContext()
 	defer cancel()
 	go func() { <-ctx.Done(); _ = srv.Shutdown(context.Background()) }()

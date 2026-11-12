@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -352,12 +354,140 @@ func TestPageHasToken(t *testing.T) {
 	defer srv.Close()
 	resp, _ := http.Get(srv.URL + "/")
 	b, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(b), `const TOKEN = "`+token+`"`) || strings.Contains(string(b), "__LACARTA_TOKEN__") {
-		t.Fatal("the page must carry the token")
+	if !strings.Contains(string(b), `<meta name="lacarta-token" content="`+token+`">`) || strings.Contains(string(b), "__LACARTA_TOKEN__") {
+		t.Fatalf("the page must carry the token: %s", b)
 	}
-	if resp.Header.Get("Content-Security-Policy") == "" || resp.Header.Get("X-Frame-Options") != "DENY" {
-		t.Fatal("security headers")
+	csp := resp.Header.Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "script-src 'self' 'unsafe-inline'") ||
+		resp.Header.Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("the Svelte console allows no inline script: %q", csp)
 	}
+	if strings.Contains(string(b), "<script>") {
+		t.Fatal("the built page must not contain inline scripts")
+	}
+	// Its assets exist, are typed and cached for good.
+	asset := regexp.MustCompile(`src="(/assets/[^"]+\.js)"`).FindStringSubmatch(string(b))
+	if asset == nil {
+		t.Fatal("no script asset in the page")
+	}
+	a, _ := http.Get(srv.URL + asset[1])
+	if a.StatusCode != 200 || !strings.Contains(a.Header.Get("Content-Type"), "javascript") ||
+		!strings.Contains(a.Header.Get("Cache-Control"), "immutable") {
+		t.Fatalf("asset: %d %q %q", a.StatusCode, a.Header.Get("Content-Type"), a.Header.Get("Cache-Control"))
+	}
+	if r, _ := http.Get(srv.URL + "/assets/nope.js"); r.StatusCode != 404 {
+		t.Fatal("unknown asset")
+	}
+	// The prototype's page stays reachable, with its own token and the inline-script CSP it needs.
+	l, _ := http.Get(srv.URL + "/legacy/")
+	lb, _ := io.ReadAll(l.Body)
+	if !strings.Contains(string(lb), `const TOKEN = "`+token+`"`) || !strings.Contains(l.Header.Get("Content-Security-Policy"), "'unsafe-inline'") {
+		t.Fatal("legacy page")
+	}
+}
+
+func TestPageFromWebDir(t *testing.T) {
+	_, _, _ = fixture(t)
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "index.html"), []byte(`<meta name="lacarta-token" content="__LACARTA_TOKEN__">dev`), 0o644)
+	t.Setenv("LACARTA_WEB_DIR", dir)
+	srv := httptest.NewServer(Handler(Config{Token: token}))
+	defer srv.Close()
+	resp, _ := http.Get(srv.URL + "/")
+	b, _ := io.ReadAll(resp.Body)
+	if !strings.HasSuffix(string(b), "dev") || !strings.Contains(string(b), token) {
+		t.Fatalf("LACARTA_WEB_DIR must serve the page from disk: %s", b)
+	}
+}
+
+// readEvent returns the next event name and data from a server-sent event stream.
+func readEvent(t *testing.T, r *bufio.Reader, timeout time.Duration) (string, string) {
+	t.Helper()
+	type ev struct{ name, data string }
+	got := make(chan ev, 1)
+	go func() {
+		var name, data string
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				return
+			}
+			line = strings.TrimRight(line, "\n")
+			switch {
+			case strings.HasPrefix(line, "event: "):
+				name = line[7:]
+			case strings.HasPrefix(line, "data: "):
+				data = line[6:]
+			case line == "" && name != "":
+				got <- ev{name, data}
+				return
+			}
+		}
+	}()
+	select {
+	case e := <-got:
+		return e.name, e.data
+	case <-time.After(timeout):
+		t.Fatal("no event")
+		return "", ""
+	}
+}
+
+func TestEvents(t *testing.T) {
+	_, taskID, softID := fixture(t)
+	WatchEvery = 20 * time.Millisecond
+	con := NewConsole(Config{Token: token})
+	srv := httptest.NewServer(con)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/api/events")
+	if err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("stream: %v %v", err, resp)
+	}
+	defer resp.Body.Close()
+	r := bufio.NewReader(resp.Body)
+	time.Sleep(60 * time.Millisecond) // let the watcher take its first snapshot
+
+	// A change to one project announces that project, then the hub.
+	if code, _ := doPost(t, srv, "/api/p/"+softID+"/remote", `{"on":false}`, nil); code != 200 {
+		t.Fatal("remote")
+	}
+	seen := map[string]string{}
+	for len(seen) < 2 {
+		name, data := readEvent(t, r, 3*time.Second)
+		seen[name] = data
+	}
+	if seen["project"] != softID {
+		t.Fatalf("project event: %v", seen)
+	}
+	// Writes by another process (a hook, the CLI) are noticed too.
+	s, _ := core.ProjectStore(taskID)
+	core.Actor = core.Orchestrator
+	_ = s.Edit(func(st *core.State) error { core.Log(st, "from a hook", "agent"); return nil })
+	for {
+		name, data := readEvent(t, r, 3*time.Second)
+		if name == "project" && data == taskID {
+			break
+		}
+	}
+	// Server shutdown ends the stream.
+	con.Close()
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		t.Fatalf("stream did not end cleanly: %v", err)
+	}
+}
+
+func TestEventsNeedTheKeyWhenExposed(t *testing.T) {
+	_, _, _ = fixture(t)
+	srv := httptest.NewServer(Handler(Config{Token: token, RequireKey: true}))
+	defer srv.Close()
+	if r, _ := http.Get(srv.URL + "/api/events"); r.StatusCode != 403 {
+		t.Fatalf("without key: %d", r.StatusCode)
+	}
+	r, _ := http.Get(srv.URL + "/api/events?key=" + token)
+	if r.StatusCode != 200 {
+		t.Fatalf("with key: %d", r.StatusCode)
+	}
+	r.Body.Close()
 }
 
 func TestMain(m *testing.M) {

@@ -16,7 +16,12 @@ import (
 
 // The test binary doubles as a hook process for the signal test.
 func TestMain(m *testing.M) {
-	if os.Getenv("HOOKS_TEST_CHILD") != "" {
+	switch os.Getenv("HOOKS_TEST_CHILD") {
+	case "":
+	case "listen":
+		_ = Listen(&core.Store{Root: os.Getenv("HOOKS_TEST_ROOT"), Dir: os.Getenv("HOOKS_TEST_DIR")}, os.Stdout, 0)
+		os.Exit(0)
+	default:
 		Run(os.Getenv("HOOKS_TEST_CHILD"), os.Stdin, os.Stdout)
 		os.Exit(0)
 	}
@@ -44,30 +49,36 @@ func setup(t *testing.T, remote bool) (*core.Store, string) {
 	return s, cwd
 }
 
-// stopAsync runs a Stop hook and returns its output once it ends.
-func stopAsync() <-chan string {
+func runHook(event, payload string) string {
+	var out bytes.Buffer
+	Run(event, strings.NewReader(payload), &out)
+	return out.String()
+}
+
+// listenAsync runs `lacarta listen` and returns its output once it ends.
+func listenAsync(s *core.Store) <-chan string {
 	done := make(chan string, 1)
 	go func() {
 		var out bytes.Buffer
-		Run("stop", strings.NewReader(`{"session_id":"s-1"}`), &out)
+		_ = Listen(s, &out, 0)
 		done <- out.String()
 	}()
 	return done
 }
 
-func waitListening(t *testing.T, s *core.Store, want bool) {
+func waitListener(t *testing.T, s *core.Store, alive bool) {
 	t.Helper()
 	for range 200 {
 		st, err := s.Read()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if (st.Listening != nil) == want {
+		if (st.Listening != nil && st.Listening.PID != 0) == alive {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("listening never became %v", want)
+	t.Fatalf("a listener never became %v", alive)
 }
 
 func edit(t *testing.T, s *core.Store, fn func(*core.State) error) {
@@ -94,111 +105,164 @@ func receive(t *testing.T, done <-chan string) string {
 	case out := <-done:
 		return out
 	case <-time.After(5 * time.Second):
-		t.Fatal("the Stop hook did not return")
+		t.Fatal("the listener did not return")
 		return ""
 	}
 }
 
+// ---------------------------------------------------------------- Stop hook
+
 func TestStopDeliversQueuedMessageAtOnce(t *testing.T) {
 	s, _ := setup(t, true)
 	edit(t, s, func(st *core.State) error { _, err := core.AddMessage(st, "hi"); return err })
-	reason := blockReason(t, receive(t, stopAsync()))
-	if !strings.Contains(reason, "hi") {
+	if reason := blockReason(t, runHook("stop", `{"session_id":"s-1"}`)); !strings.Contains(reason, "hi") {
 		t.Fatal(reason)
 	}
 }
 
-func TestStopWithoutRemoteReturnsAtOnce(t *testing.T) {
+func TestStopWithoutRemoteDoesNothing(t *testing.T) {
 	_, _ = setup(t, false)
-	if out := receive(t, stopAsync()); out != "" {
+	if out := runHook("stop", `{"session_id":"s-1"}`); out != "" {
 		t.Fatalf("expected nothing, got %q", out)
 	}
 }
 
-func TestStopListensForAMessage(t *testing.T) {
+// The Stop hook never holds the terminal: without a listener it asks for one, once.
+func TestStopAsksForAListenerOnce(t *testing.T) {
+	_, _ = setup(t, true)
+	start := time.Now()
+	reason := blockReason(t, runHook("stop", `{"session_id":"s-1"}`))
+	if !strings.Contains(reason, "listen` as a background command") || time.Since(start) > time.Second {
+		t.Fatalf("%q after %v", reason, time.Since(start))
+	}
+	if out := runHook("stop", `{"session_id":"s-1","stop_hook_active":true}`); out != "" {
+		t.Fatalf("a second stop in a row must not block again: %q", out)
+	}
+}
+
+func TestStopWithAListenerLetsTheTurnEnd(t *testing.T) {
 	s, _ := setup(t, true)
-	done := stopAsync()
-	waitListening(t, s, true)
+	done := listenAsync(s)
+	waitListener(t, s, true)
+	if out := runHook("stop", `{"session_id":"s-1"}`); out != "" {
+		t.Fatalf("with a listener running the stop must not block: %q", out)
+	}
 	st, _ := s.Read()
-	if core.AgentStatus(st, core.MustAgent(st, core.Orchestrator)) != "listening" {
-		t.Fatal("the console should show the agent as listening")
+	if core.AgentStatus(st, core.MustAgent(st, core.Orchestrator)) != "listening" || !core.IsListening(st) {
+		t.Fatal("the console should show the agent as listening once its turn ended")
+	}
+	edit(t, s, func(st *core.State) error { off := false; st.Remote = &off; return nil })
+	receive(t, done)
+}
+
+// ------------------------------------------------------------------ listen
+
+func TestListenWakesOnAMessage(t *testing.T) {
+	s, _ := setup(t, true)
+	done := listenAsync(s)
+	waitListener(t, s, true)
+	st, _ := s.Read()
+	if core.IsListening(st) {
+		t.Fatal("while the agent works, it is not shown as listening")
 	}
 	edit(t, s, func(st *core.State) error { _, err := core.AddMessage(st, "Write the plan"); return err })
-	reason := blockReason(t, receive(t, done))
-	if !strings.HasPrefix(reason, core.ConsoleTag) || !strings.HasSuffix(reason, "Write the plan") {
-		t.Fatal(reason)
+	out := receive(t, done)
+	if !strings.HasPrefix(out, core.ConsoleTag) || !strings.Contains(out, "Write the plan") ||
+		!strings.Contains(out, "listen` again as a background command") {
+		t.Fatal(out)
 	}
-	waitListening(t, s, false)
+	waitListener(t, s, false)
 	st, _ = s.Read()
 	if len(core.PendingMessages(st)) != 0 || core.MustAgent(st, core.Orchestrator).Status != "working" {
 		t.Fatal("the message should be delivered and the agent working")
 	}
 }
 
-func TestStopWakesOnAnswer(t *testing.T) {
+func TestListenWakesOnAnswer(t *testing.T) {
 	s, _ := setup(t, true)
 	edit(t, s, func(st *core.State) error {
 		_, err := core.AddQuestion(st, "question", "DB?", "", []string{"A", "B"}, nil, core.Context{}, true, nil)
 		return err
 	})
-	done := stopAsync()
-	waitListening(t, s, true)
+	done := listenAsync(s)
+	waitListener(t, s, true)
 	edit(t, s, func(st *core.State) error {
 		_, err := core.AnswerQuestion(st, "Q-1", "B", "why not", "user")
 		return err
 	})
-	reason := blockReason(t, receive(t, done))
-	if !strings.Contains(reason, `Q-1 (DB?) was answered: {"choice": "B", "comment": "why not"`) {
-		t.Fatal(reason)
+	if out := receive(t, done); !strings.Contains(out, `Q-1 (DB?) was answered: {"choice": "B", "comment": "why not"`) {
+		t.Fatal(out)
 	}
 }
 
-func TestStopWakesOnTalkAboutThis(t *testing.T) {
+func TestListenWakesOnTalkAboutThis(t *testing.T) {
 	s, _ := setup(t, true)
 	edit(t, s, func(st *core.State) error {
 		_, err := core.AddQuestion(st, "question", "DB?", "", []string{"A", "B"}, nil, core.Context{}, true, nil)
 		return err
 	})
-	done := stopAsync()
-	waitListening(t, s, true)
+	done := listenAsync(s)
+	waitListener(t, s, true)
 	edit(t, s, func(st *core.State) error { _, err := core.DiscussQuestion(st, "Q-1", "What does B cost?"); return err })
-	reason := blockReason(t, receive(t, done))
-	if !strings.Contains(reason, "Talk about this") || !strings.Contains(reason, "What does B cost?") {
-		t.Fatal(reason)
+	if out := receive(t, done); !strings.Contains(out, "Talk about this") || !strings.Contains(out, "What does B cost?") {
+		t.Fatal(out)
 	}
 }
 
-func TestStopEndsWhenRemoteIsTurnedOff(t *testing.T) {
+func TestListenEndsWhenRemoteIsTurnedOff(t *testing.T) {
 	s, _ := setup(t, true)
-	done := stopAsync()
-	waitListening(t, s, true)
+	done := listenAsync(s)
+	waitListener(t, s, true)
 	edit(t, s, func(st *core.State) error { off := false; st.Remote = &off; return nil })
-	if out := receive(t, done); out != "" {
-		t.Fatalf("expected nothing, got %q", out)
+	if out := receive(t, done); !strings.Contains(out, "turned remote control off") {
+		t.Fatal(out)
 	}
-	waitListening(t, s, false)
+	waitListener(t, s, false)
+	var out bytes.Buffer
+	_ = Listen(s, &out, 0)
+	if !strings.Contains(out.String(), "Remote control is off") {
+		t.Fatalf("with remote control off, listen returns at once: %q", out.String())
+	}
 }
 
-// Esc in Claude Code ends the hook process; it must not leave the project shown as listening.
-func TestStopSIGTERMClearsListening(t *testing.T) {
+func TestListenNewerListenerTakesOver(t *testing.T) {
+	s, _ := setup(t, true)
+	first := listenAsync(s)
+	waitListener(t, s, true)
+	edit(t, s, func(st *core.State) error { st.Listening.PID = os.Getppid(); return nil }) // another live process
+	if out := receive(t, first); !strings.Contains(out, "Another listener took over") {
+		t.Fatal(out)
+	}
+	st, _ := s.Read()
+	if st.Listening == nil || st.Listening.PID != os.Getppid() {
+		t.Fatal("the old listener must not unregister the new one")
+	}
+}
+
+func TestListenTimeout(t *testing.T) {
+	s, _ := setup(t, true)
+	var out bytes.Buffer
+	if err := Listen(s, &out, 100*time.Millisecond); err != nil || !strings.Contains(out.String(), "Nothing from the console yet") {
+		t.Fatalf("%v %q", err, out.String())
+	}
+}
+
+// A listener killed by the CLI (session end, /clear) unregisters on SIGTERM.
+func TestListenSIGTERMUnregisters(t *testing.T) {
 	s, _ := setup(t, true)
 	cmd := exec.Command(os.Args[0], "-test.run=^$")
-	cmd.Env = append(os.Environ(), "HOOKS_TEST_CHILD=stop")
-	cmd.Stdin = strings.NewReader(`{"session_id":"s-1"}`)
+	cmd.Env = append(os.Environ(), "HOOKS_TEST_CHILD=listen", "HOOKS_TEST_DIR="+s.Dir, "HOOKS_TEST_ROOT="+s.Root)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	waitListening(t, s, true)
+	waitListener(t, s, true)
 	_ = cmd.Process.Signal(syscall.SIGTERM)
 	if err := cmd.Wait(); err != nil {
-		t.Fatalf("hook exited with %v", err)
+		t.Fatalf("listener exited with %v", err)
 	}
-	waitListening(t, s, false)
-	if out.Len() != 0 {
-		t.Fatalf("a cancelled wait must not block the stop: %q", out.String())
-	}
+	waitListener(t, s, false)
 }
 
 // Killed outright (no chance to clean up), the dead pid still stops it showing as listening.
@@ -329,7 +393,7 @@ func TestInstall(t *testing.T) {
 	}
 	stop := cfg.Hooks["Stop"]
 	if len(stop) != 2 || stop[0].Hooks[0].Command != "notify-send done" || stop[1].Hooks[0].Command != "/opt/lacarta hook stop" ||
-		stop[1].Hooks[0].Timeout != 86400 {
+		stop[1].Hooks[0].Timeout != 30 {
 		t.Fatalf("the prototype's hook must be replaced and others kept: %s", b)
 	}
 	if cfg.Hooks["PostToolUse"][0].Matcher != "*" {
