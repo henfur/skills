@@ -1,0 +1,8 @@
+# `init` inside a registered single-agent session moves the session into the new project.
+> mkdir -p app && echo '{"session_id":"s-2","cwd":"'"$W"'/app","transcript_path":"","source":"startup"}' | CLAUDE_ENV_FILE="$W/env" python3 "$PYLACARTA" hook session-start > /dev/null
+@env env
+$ ask --title "Left open"
+$ --root app init --name "App"
+$ --project $LACARTA_PROJECT status
+$ --root app status
+$ --root app agent list

@@ -1,0 +1,788 @@
+$ init --name "Invoice tracker" --summary "Track invoices"
+Initialised <W>/.lacarta as project invoice-tracker-79c3
+Spec templates: <W>/.lacarta/specs
+Console: not running; start it with `serve`
+Next: tell the user the console URL, then ask what the project is (unless they already said).
+[exit 0]
+
+$ status
+Invoice tracker: stage specification
+
+Specs:
+  functional    draft              rev 0  (13 TODO lines)
+  architecture  draft              rev 0  (15 TODO lines)
+  stack         draft              rev 0  (13 TODO lines)
+  security      draft              rev 0  (14 TODO lines)
+
+Spec review: none
+
+Phase plan: draft
+
+Next: Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/architecture.md, .lacarta/specs/stack.md, .lacarta/specs/security.md still have TODOs.
+[exit 0]
+
+$ init
+stderr: Refused: <W>/.lacarta already exists. Use `status` to resume.
+[exit 2]
+
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+stderr: Refused: Report file review.md not found.
+[exit 2]
+
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+stderr: Refused: The specification is not complete (TODOs in functional, architecture, stack, security). It is reviewed once everything is written.
+[exit 2]
+
+$ review add --phase 1 --type specification --verdict pass --report review.md --summary "Wrong phase"
+stderr: Refused: The specification review is `--phase spec --type specification`; phases and the final review take functional and security reviews.
+[exit 2]
+
+$ status
+Invoice tracker: stage specification
+
+Specs:
+  functional    draft              rev 0
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: none
+
+Phase plan: draft
+
+Next: Define the phase plan with `phase add`.
+[exit 0]
+
+$ spec submit functional
+stderr: Refused: No specification review yet. Run a fresh spec reviewer (references/spec-review.md) first.
+[exit 2]
+
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+stderr: Refused: The phase plan is part of the specification: add phases first.
+[exit 2]
+
+$ phase add --title "Core" --goal "Invoices can be created" --scope "API" --scope "Storage" --covers FR-1 --covers SR-1
+Phase 1 added.
+[exit 0]
+
+$ phase add --title "Screens" --goal "Invoices are usable from a browser"
+Phase 2 added.
+[exit 0]
+
+$ ask --title "Which database?" --option "Postgres|Robust, needs a server" --option "SQLite|One file" --spec stack
+Q-1
+[exit 0]
+
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+stderr: Refused: Questions still open (Q-1): the specification is not final yet.
+[exit 2]
+
+$ answer Q-1 --choice MySQL
+stderr: Refused: Choose one of ['Postgres', 'SQLite'] or write an answer.
+[exit 2]
+
+$ answer Q-1 --choice SQLite --comment "keep it simple"
+Q-1 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ wait Q-1
+{
+  "id": "Q-1",
+  "title": "Which database?",
+  "choice": "SQLite",
+  "comment": "keep it simple",
+  "by": "user (terminal)",
+  "at": "<TS>"
+}
+Next: Everything is written. Spawn a fresh spec reviewer with no memory (references/spec-review.md) and record it with `review add --phase spec --type specification`.
+[exit 0]
+
+$ answer Q-1 --choice SQLite
+stderr: Refused: Q-1 is already answered.
+[exit 2]
+
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+R-1 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ status
+Invoice tracker: stage specification
+
+Specs:
+  functional    draft              rev 0
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: passed
+
+Phase plan: draft
+  1. Core                                     planned            functional:- security:-
+  2. Screens                                  planned            functional:- security:-
+
+Next: Spec review passed: submit for approval with `spec submit` (functional, architecture, stack, security).
+[exit 0]
+
+$ spec submit functional
+Q-2 asks the user to approve the functional spec. `wait Q-2`.
+[exit 0]
+
+$ spec submit functional
+stderr: Refused: The functional spec is already in-review.
+[exit 2]
+
+$ spec submit architecture --note "Look at the data flows."
+Q-3 asks the user to approve the architecture spec. `wait Q-3`.
+[exit 0]
+
+$ spec submit stack
+Q-4 asks the user to approve the stack spec. `wait Q-4`.
+[exit 0]
+
+$ spec submit security
+Q-5 asks the user to approve the security spec. `wait Q-5`.
+[exit 0]
+
+$ plan submit
+Q-6 asks the user to approve the plan. `wait Q-6`.
+[exit 0]
+
+$ phase add --title "Late" --goal "Too late"
+stderr: Refused: The phase plan is approved. Changing it is a decision: `ask` the user first, then `plan reopen`.
+[exit 2]
+
+$ answer Q-2 --choice Approve
+Q-2 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ answer Q-3 --choice Approve --comment "fine"
+Q-3 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ answer Q-4 --comment "free text is not allowed here"
+stderr: Refused: Choose one of ['Approve', 'Request changes'].
+[exit 2]
+
+$ answer Q-4 --choice Approve
+Q-4 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ answer Q-5 --choice Approve
+Q-5 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ status
+Invoice tracker: stage specification
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: in-review
+  1. Core                                     planned            functional:- security:-
+  2. Screens                                  planned            functional:- security:-
+
+Open questions:
+  Q-6 [validation] Approve the phase plan (2 phases)?
+
+Next: Wait for the user to answer Q-6 in the console.
+[exit 0]
+
+$ answer Q-6 --choice Approve
+Q-6 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ status
+Invoice tracker: stage implementation
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Core                                     planned            functional:- security:-
+  2. Screens                                  planned            functional:- security:-
+
+Next: `phase start 1`.
+[exit 0]
+
+$ phase start 2
+stderr: Refused: Phase 1 is not done yet.
+[exit 2]
+
+$ phase start 1
+Phase 1 started.
+[exit 0]
+
+$ phase start 1
+stderr: Refused: Phase 1 is in-progress.
+[exit 2]
+
+$ agent start --role security_review --task "Review phase 1" --phase 1
+A-2 Basil: security review on Opus 5.5 (Agent tool model: opus).
+Tell the subagent its name is Basil and to run every lacarta command as `<L> --agent A-2 <command>`.
+When it returns: `agent done A-2 --summary "..."` (or `--failed`).
+[exit 0]
+
+$ --agent A-2 finding add --phase 1 --review security --severity high --title "SQL injection in search"
+stderr: Refused: A high finding blocks the project and the user must decide on it: give --scenario (what an input or user does, and what goes wrong) and --recommendation (the fix you propose).
+[exit 2]
+
+$ --agent A-2 finding add --phase 1 --review security --severity high --title "SQL injection in search" --detail "The query is built with string formatting." --location app/search.py:12 --scenario "q=' OR 1=1 -- returns every invoice" --recommendation "Use bound parameters"
+F-1 recorded. BLOCKING: development stops. Q-7 asks the user to decide. Stop writing code and `wait Q-7`.
+[exit 0]
+
+$ --agent A-2 finding add --phase 1 --review security --severity low --title "Verbose error page"
+F-2 recorded.
+[exit 0]
+
+$ phase complete 1
+stderr: Refused: Blocked. Unresolved high or critical finding: F-1 (high).
+[exit 2]
+
+$ status
+Invoice tracker: stage implementation
+BLOCKED: Unresolved high or critical finding: F-1 (high).
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Core                                     in-progress        functional:- security:-
+  2. Screens                                  planned            functional:- security:-
+
+Open questions:
+  Q-7 [decision] F-1: SQL injection in search
+
+Unresolved findings:
+  F-1 high     open      phase 1: SQL injection in search
+  F-2 low      open      phase 1: Verbose error page
+
+Next: Blocked: wait for the user's decision on Q-7 (`wait Q-7`). Do not write code.
+[exit 0]
+
+$ finding resolve F-1 --status accepted --note "fine"
+stderr: Refused: F-1 is high: only the user can accept it, through its triage question.
+[exit 2]
+
+$ finding resolve F-1 --status fixed --note "too early"
+stderr: Refused: The user has not decided on F-1 yet. Wait for the triage answer.
+[exit 2]
+
+$ answer Q-7 --choice "Accept the risk"
+stderr: Refused: Accepting a high or critical risk needs a written rationale.
+[exit 2]
+
+$ answer Q-7 --choice "Fix it now"
+Q-7 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ wait Q-7
+{
+  "id": "Q-7",
+  "title": "F-1: SQL injection in search",
+  "choice": "Fix it now",
+  "comment": "",
+  "by": "user (terminal)",
+  "at": "<TS>"
+}
+Next: Blocked on F-1 (fixing): fix it, re-run the security review, then `finding resolve F-1 --status fixed`. Nothing else advances.
+[exit 0]
+
+$ status
+Invoice tracker: stage implementation
+BLOCKED: Unresolved high or critical finding: F-1 (high).
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Core                                     in-progress        functional:- security:-
+  2. Screens                                  planned            functional:- security:-
+
+Unresolved findings:
+  F-1 high     fixing    phase 1: SQL injection in search
+  F-2 low      open      phase 1: Verbose error page
+
+Next: Blocked on F-1 (fixing): fix it, re-run the security review, then `finding resolve F-1 --status fixed`. Nothing else advances.
+[exit 0]
+
+$ finding resolve F-1 --status fixed --note "Bound parameters; test_search_injection"
+F-1 fixed.
+[exit 0]
+
+$ finding resolve F-1 --status fixed --note "again"
+stderr: Refused: F-1 is already fixed.
+[exit 2]
+
+$ phase complete 1
+stderr: Refused: No functional review recorded for phase 1.
+[exit 2]
+
+$ review add --phase 1 --type functional --verdict pass --report review.md --summary "Meets FR-1"
+R-2 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ --agent A-2 review add --phase 1 --type security --verdict fail --report review.md --summary "F-2 open"
+R-3 recorded (fail). Record each finding with `finding add`.
+[exit 0]
+
+$ phase complete 1
+stderr: Refused: The latest security review of phase 1 (R-3) failed. Fix and review again.
+[exit 2]
+
+$ --agent A-2 review add --phase 1 --type security --verdict pass --report review.md --summary "Clean"
+R-4 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ phase complete 1
+stderr: Refused: Unresolved findings in phase 1: F-2.
+[exit 2]
+
+$ finding resolve F-2 --status wont-fix --note "Errors are generic in production"
+F-2 wont-fix.
+[exit 0]
+
+$ agent done A-2 --summary "Phase 1 reviewed"
+A-2 done.
+[exit 0]
+
+$ agent done A-2
+stderr: Refused: Basil is already done.
+[exit 2]
+
+$ --agent A-2 ask --title "Too late"
+stderr: Refused: Basil (A-2) is done; start a new agent with `agent start`.
+[exit 2]
+
+$ phase complete 1 --summary "Invoices can be created through the API."
+Q-8 asks the user to approve phase 1. `wait Q-8`.
+[exit 0]
+
+$ answer Q-8 --choice "Request changes" --comment "Add pagination"
+Q-8 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ status
+Invoice tracker: stage implementation
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Core                                     in-progress        functional:pass security:pass
+  2. Screens                                  planned            functional:- security:-
+
+Next: Phase 1 reviews passed: `phase complete 1`.
+[exit 0]
+
+$ phase complete 1 --summary "With pagination."
+Q-9 asks the user to approve phase 1. `wait Q-9`.
+[exit 0]
+
+$ answer Q-9 --choice Approve
+Q-9 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ final start
+stderr: Refused: Phases not done: [2].
+[exit 2]
+
+$ phase start 2
+Phase 2 started.
+[exit 0]
+
+$ review add --phase 2 --type functional --verdict pass --report review.md --summary "ok"
+R-5 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ review add --phase 2 --type security --verdict pass --report review.md --summary "ok"
+R-6 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ phase complete 2
+Q-10 asks the user to approve phase 2. `wait Q-10`.
+[exit 0]
+
+$ answer Q-10 --choice Approve
+Q-10 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ status
+Invoice tracker: stage implementation
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Core                                     done               functional:pass security:pass
+  2. Screens                                  done               functional:pass security:pass
+
+Next: All phases done: `final start`, then run the final review with fresh agents.
+[exit 0]
+
+$ final complete
+stderr: Refused: Not in final review (now: implementation).
+[exit 2]
+
+$ final start
+Stage: final-review. Spawn fresh reviewers as described in references/final-review.md.
+[exit 0]
+
+$ final complete
+stderr: Refused: The final functional review has not passed.
+[exit 2]
+
+$ review add --phase final --type functional --verdict pass --report review.md --summary "Matches the specs"
+R-7 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ review add --phase final --type security --verdict pass --report review.md --summary "No findings"
+R-8 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ final complete --summary "Both passed."
+Q-11 asks for final approval. `wait Q-11`.
+[exit 0]
+
+$ status
+Invoice tracker: stage final-review
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Core                                     done               functional:pass security:pass
+  2. Screens                                  done               functional:pass security:pass
+
+Open questions:
+  Q-11 [validation] Approve the final review and close the project?
+
+Next: Wait for the user's final approval in the console.
+[exit 0]
+
+$ answer Q-11 --choice Approve
+Q-11 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ status
+Invoice tracker: stage done
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Core                                     done               functional:pass security:pass
+  2. Screens                                  done               functional:pass security:pass
+
+Next: The project is done.
+[exit 0]
+
+$ decide --title "Keep SQLite for v1" --decision "SQLite" --rationale "One user" --phase 1
+D-12 recorded.
+[exit 0]
+
+$ decisions
+# Decision log: Invoice tracker
+
+## D-1: Which database?
+
+- Decided by: user (terminal), <TS> (spec: stack)
+- Decision: SQLite
+- Rationale or comment: keep it simple
+
+## D-2: Approve the Functional spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: functional)
+- Question asked:
+
+  > Read it under Specifications → Functional.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-3: Approve the Architecture & design spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: architecture)
+- Question asked:
+
+  > Look at the data flows.
+
+  Options: Approve / Request changes
+- Decision: Approve
+- Rationale or comment: fine
+
+## D-4: Approve the Tech stack spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: stack)
+- Question asked:
+
+  > Read it under Specifications → Tech stack.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-5: Approve the Security & threat model spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: security)
+- Question asked:
+
+  > Read it under Specifications → Security & threat model.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-6: Approve the phase plan (2 phases)?
+
+- Decided by: user (terminal), <TS>
+- Question asked:
+
+  > 1. **Core**: Invoices can be created
+  > 2. **Screens**: Invoices are usable from a browser
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-7: F-1: SQL injection in search
+
+- Decided by: user (terminal), <TS> (spec: security, phase 1)
+- Question asked:
+
+  > **HIGH** finding from the security review of phase 1. Development is stopped until you decide.
+  > 
+  > _High means: serious impact with a realistic precondition (an authenticated user, a specific configuration): authorisation bypass, injection, account takeover, sensitive data exposure._
+  > 
+  > ### What is wrong
+  > 
+  > The query is built with string formatting.
+  > 
+  > ### How it goes wrong
+  > 
+  > q=' OR 1=1 -- returns every invoice
+  > 
+  > ### Where
+  > 
+  > `app/search.py:12`
+  > 
+  > ### Proposed fix
+  > 
+  > Use bound parameters
+  > 
+  > Not sure which option fits? Use **Talk about this** to ask the agent first; development stays stopped meanwhile.
+
+  Options: Fix it now / Change the spec or design / Accept the risk / Stop the project
+- Decision: Fix it now
+
+## D-8: Approve phase 1: Core?
+
+- Decided by: user (terminal), <TS> (phase 1)
+- Question asked:
+
+  > Invoices can be created through the API.
+  > 
+  > Reviews passed. Findings this phase: 2 (1 fixed, 0 accepted).
+
+  Options: Approve / Request changes
+- Decision: Request changes
+- Rationale or comment: Add pagination
+
+## D-9: Approve phase 1: Core?
+
+- Decided by: user (terminal), <TS> (phase 1)
+- Question asked:
+
+  > With pagination.
+  > 
+  > Reviews passed. Findings this phase: 2 (1 fixed, 0 accepted).
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-10: Approve phase 2: Screens?
+
+- Decided by: user (terminal), <TS> (phase 2)
+- Question asked:
+
+  > Reviews passed. Findings this phase: 0 (0 fixed, 0 accepted).
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-11: Approve the final review and close the project?
+
+- Decided by: user (terminal), <TS> (the final review)
+- Question asked:
+
+  > Both passed.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-12: Keep SQLite for v1
+
+- Decided by: agent, <TS> (phase 1)
+- Decision: SQLite
+- Rationale or comment: One user
+
+[exit 0]
+
+$ agent list
+  A-1   Ada        orchestrator             opus    done     Runs the framework and talks to you.
+  A-2   Basil      security_review          opus    done     Review phase 1
+[exit 0]
+
+$ agent rename A-2 --name Ada
+stderr: Refused: Ada is taken.
+[exit 2]
+
+$ agent rename A-2 --name Bea
+A-2 is Bea.
+[exit 0]
+
+$ agent update A-1 --task "Wrapping up" --status idle
+A-1 updated.
+[exit 0]
+
+$ agent list
+  A-1   Ada        orchestrator             opus    done     Wrapping up
+  A-2   Bea        security_review          opus    done     Review phase 1
+[exit 0]
+
+$ reply Q-1 --message "too late"
+stderr: Refused: Q-1 is no longer open.
+[exit 2]
+
+$ wait
+No open questions.
+Next: The project is done.
+[exit 0]
+
+$ wait Q-99
+stderr: Refused: No question Q-99.
+[exit 2]
+
+$ models
+Models for software development projects (console Settings page):
+  orchestrator             opus    Opus 5.5    Orchestrator
+  spec_review              sonnet  Sonnet 5.5  Specification review
+  implementation           opus    Opus 5.5    Implementation
+  functional_review        sonnet  Sonnet 5.5  Functional review
+  security_review          opus    Opus 5.5    Security review
+  final_functional_review  sonnet  Sonnet 5.5  Final functional review
+  final_security_review    opus    Opus 5.5    Final security review
+
+Pass the alias (second column) as the Agent tool's `model` when you spawn that role. The session itself runs the first role's model: if it differs, ask the user to `/model <alias>`.
+[exit 0]
+
+$ models --json
+{
+  "orchestrator": {
+    "model": "opus",
+    "name": "Opus 5.5",
+    "id": "claude-opus-5-5"
+  },
+  "spec_review": {
+    "model": "sonnet",
+    "name": "Sonnet 5.5",
+    "id": "claude-sonnet-5-5"
+  },
+  "implementation": {
+    "model": "opus",
+    "name": "Opus 5.5",
+    "id": "claude-opus-5-5"
+  },
+  "functional_review": {
+    "model": "sonnet",
+    "name": "Sonnet 5.5",
+    "id": "claude-sonnet-5-5"
+  },
+  "security_review": {
+    "model": "opus",
+    "name": "Opus 5.5",
+    "id": "claude-opus-5-5"
+  },
+  "final_functional_review": {
+    "model": "sonnet",
+    "name": "Sonnet 5.5",
+    "id": "claude-sonnet-5-5"
+  },
+  "final_security_review": {
+    "model": "opus",
+    "name": "Opus 5.5",
+    "id": "claude-opus-5-5"
+  }
+}
+[exit 0]
+
+$ models --set security_review=haiku
+Models for software development projects (console Settings page):
+  orchestrator             opus    Opus 5.5    Orchestrator
+  spec_review              sonnet  Sonnet 5.5  Specification review
+  implementation           opus    Opus 5.5    Implementation
+  functional_review        sonnet  Sonnet 5.5  Functional review
+  security_review          haiku   Haiku 5.5   Security review
+  final_functional_review  sonnet  Sonnet 5.5  Final functional review
+  final_security_review    opus    Opus 5.5    Final security review
+
+Pass the alias (second column) as the Agent tool's `model` when you spawn that role. The session itself runs the first role's model: if it differs, ask the user to `/model <alias>`.
+[exit 0]
+
+$ models --set security_review=gpt
+stderr: Refused: Unknown model gpt. Models: opus, sonnet, haiku, fable.
+[exit 2]
+
+$ models
+Models for software development projects (console Settings page):
+  orchestrator             opus    Opus 5.5    Orchestrator
+  spec_review              sonnet  Sonnet 5.5  Specification review
+  implementation           opus    Opus 5.5    Implementation
+  functional_review        sonnet  Sonnet 5.5  Functional review
+  security_review          haiku   Haiku 5.5   Security review
+  final_functional_review  sonnet  Sonnet 5.5  Final functional review
+  final_security_review    opus    Opus 5.5    Final security review
+
+Pass the alias (second column) as the Agent tool's `model` when you spawn that role. The session itself runs the first role's model: if it differs, ask the user to `/model <alias>`.
+[exit 0]
+
+$ inbox
+No new messages from the console.
+[exit 0]
+

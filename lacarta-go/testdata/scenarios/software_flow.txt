@@ -1,0 +1,101 @@
+# The whole software lifecycle, with the gates that refuse to skip steps.
+$ init --name "Invoice tracker" --summary "Track invoices"
+$ status
+$ init
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+> printf '# Review\n\nAll good.\n' > review.md
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+$ review add --phase 1 --type specification --verdict pass --report review.md --summary "Wrong phase"
+> for k in functional architecture stack security; do printf '# %s\n\nWritten.\n' $k > .lacarta/specs/$k.md; done
+$ status
+$ spec submit functional
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+$ phase add --title "Core" --goal "Invoices can be created" --scope "API" --scope "Storage" --covers FR-1 --covers SR-1
+$ phase add --title "Screens" --goal "Invoices are usable from a browser"
+$ ask --title "Which database?" --option "Postgres|Robust, needs a server" --option "SQLite|One file" --spec stack
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+$ answer Q-1 --choice MySQL
+$ answer Q-1 --choice SQLite --comment "keep it simple"
+$ wait Q-1
+$ answer Q-1 --choice SQLite
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "All good"
+$ status
+$ spec submit functional
+$ spec submit functional
+$ spec submit architecture --note "Look at the data flows."
+$ spec submit stack
+$ spec submit security
+$ plan submit
+$ phase add --title "Late" --goal "Too late"
+$ answer Q-2 --choice Approve
+$ answer Q-3 --choice Approve --comment "fine"
+$ answer Q-4 --comment "free text is not allowed here"
+$ answer Q-4 --choice Approve
+$ answer Q-5 --choice Approve
+$ status
+$ answer Q-6 --choice Approve
+$ status
+$ phase start 2
+$ phase start 1
+$ phase start 1
+$ agent start --role security_review --task "Review phase 1" --phase 1
+$ --agent A-2 finding add --phase 1 --review security --severity high --title "SQL injection in search"
+$ --agent A-2 finding add --phase 1 --review security --severity high --title "SQL injection in search" --detail "The query is built with string formatting." --location app/search.py:12 --scenario "q=' OR 1=1 -- returns every invoice" --recommendation "Use bound parameters"
+$ --agent A-2 finding add --phase 1 --review security --severity low --title "Verbose error page"
+$ phase complete 1
+$ status
+$ finding resolve F-1 --status accepted --note "fine"
+$ finding resolve F-1 --status fixed --note "too early"
+$ answer Q-7 --choice "Accept the risk"
+$ answer Q-7 --choice "Fix it now"
+$ wait Q-7
+$ status
+$ finding resolve F-1 --status fixed --note "Bound parameters; test_search_injection"
+$ finding resolve F-1 --status fixed --note "again"
+$ phase complete 1
+$ review add --phase 1 --type functional --verdict pass --report review.md --summary "Meets FR-1"
+$ --agent A-2 review add --phase 1 --type security --verdict fail --report review.md --summary "F-2 open"
+$ phase complete 1
+$ --agent A-2 review add --phase 1 --type security --verdict pass --report review.md --summary "Clean"
+$ phase complete 1
+$ finding resolve F-2 --status wont-fix --note "Errors are generic in production"
+$ agent done A-2 --summary "Phase 1 reviewed"
+$ agent done A-2
+$ --agent A-2 ask --title "Too late"
+$ phase complete 1 --summary "Invoices can be created through the API."
+$ answer Q-8 --choice "Request changes" --comment "Add pagination"
+$ status
+$ phase complete 1 --summary "With pagination."
+$ answer Q-9 --choice Approve
+$ final start
+$ phase start 2
+$ review add --phase 2 --type functional --verdict pass --report review.md --summary "ok"
+$ review add --phase 2 --type security --verdict pass --report review.md --summary "ok"
+$ phase complete 2
+$ answer Q-10 --choice Approve
+$ status
+$ final complete
+$ final start
+$ final complete
+$ review add --phase final --type functional --verdict pass --report review.md --summary "Matches the specs"
+$ review add --phase final --type security --verdict pass --report review.md --summary "No findings"
+$ final complete --summary "Both passed."
+$ status
+$ answer Q-11 --choice Approve
+$ status
+$ decide --title "Keep SQLite for v1" --decision "SQLite" --rationale "One user" --phase 1
+$ decisions
+$ agent list
+$ agent rename A-2 --name Ada
+$ agent rename A-2 --name Bea
+$ agent update A-1 --task "Wrapping up" --status idle
+$ agent list
+$ reply Q-1 --message "too late"
+$ wait
+$ wait Q-99
+$ models
+$ models --json
+$ models --set security_review=haiku
+$ models --set security_review=gpt
+$ models
+$ inbox

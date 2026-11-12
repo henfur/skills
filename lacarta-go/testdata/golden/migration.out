@@ -1,0 +1,51 @@
+$ init --name legacy
+Initialised <W>/.lacarta as project legacy-18fe
+Spec templates: <W>/.lacarta/specs
+Console: not running; start it with `serve`
+Next: tell the user the console URL, then ask what the project is (unless they already said).
+[exit 0]
+
+$ status
+legacy: stage specification
+
+Specs:
+  functional    draft              rev 0  (13 TODO lines)
+  architecture  draft              rev 0  (15 TODO lines)
+  stack         draft              rev 0  (13 TODO lines)
+  security      draft              rev 0  (14 TODO lines)
+
+Spec review: none
+
+Phase plan: draft
+
+Next: Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/architecture.md, .lacarta/specs/stack.md, .lacarta/specs/security.md still have TODOs.
+[exit 0]
+
+$ wait
+No open questions.
+Next: Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/architecture.md, .lacarta/specs/stack.md, .lacarta/specs/security.md still have TODOs.
+[exit 0]
+
+$ ask --title "Name?"
+Q-2
+[exit 0]
+
+$ status
+legacy: stage specification
+
+Specs:
+  functional    draft              rev 0  (13 TODO lines)
+  architecture  draft              rev 0  (15 TODO lines)
+  stack         draft              rev 0  (13 TODO lines)
+  security      draft              rev 0  (14 TODO lines)
+
+Spec review: none
+
+Phase plan: draft
+
+Open questions:
+  Q-2 [question] Name?
+
+Next: Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/architecture.md, .lacarta/specs/stack.md, .lacarta/specs/security.md still have TODOs.
+[exit 0]
+

@@ -1,0 +1,82 @@
+$ status
+app: single-agent task in <W>/app, active
+Remote control: on; console messages waiting: 0
+
+Next: Work on the task with the user.
+[exit 0]
+
+$ ask --title "Which fix?" --option "Patch|Small change" --option "Rewrite|Cleaner"
+Q-1
+[exit 0]
+
+$ phase add --title x --goal y
+stderr: Refused: `phase` belongs to software projects; this is a single-agent task. Run `init` to turn this folder into a software project.
+[exit 2]
+
+$ agent start --role implementation --task x
+stderr: Refused: A single-agent task has one agent; helpers you spawn are not tracked.
+[exit 2]
+
+$ models
+Models for single agent projects (console Settings page):
+  agent                    opus    Opus 5.5    Agent
+
+Pass the alias (second column) as the Agent tool's `model` when you spawn that role. The session itself runs the first role's model: if it differs, ask the user to `/model <alias>`.
+[exit 0]
+
+$ models --json
+{
+  "agent": {
+    "model": "opus",
+    "name": "Opus 5.5",
+    "id": "claude-opus-5-5"
+  }
+}
+[exit 0]
+
+$ inbox
+No new messages from the console.
+[exit 0]
+
+$ status
+app: single-agent task in <W>/app, active
+Remote control: on; console messages waiting: 0
+  Q-1 [question] Which fix?
+
+Next: Wait for the user to answer Q-1 in the console.
+[exit 0]
+
+$ answer Q-1 --choice Rewrite
+Q-1 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ wait
+No open questions.
+Next: Work on the task with the user.
+[exit 0]
+
+$ decisions
+# Decision log: app
+
+## D-1: Which fix?
+
+- Decided by: user (terminal), <TS>
+- Decision: Rewrite
+
+[exit 0]
+
+$ agent list
+  A-1   Ada        agent                    opus    working  Works on the task with you.
+[exit 0]
+
+$ --project $LACARTA_PROJECT status
+app: single-agent task in <W>/app, active
+Remote control: on; console messages waiting: 0
+
+Next: Work on the task with the user.
+[exit 0]
+
+$ --root app status
+stderr: Refused: No project here. `init` creates a software project in this folder; sessions register on their own once `install` has added the hooks.
+[exit 2]
+

@@ -1,0 +1,29 @@
+# Editing specs or the plan after submission invalidates reviews and approvals.
+$ init --name demo
+> for k in functional architecture stack security; do printf '# %s\n\nWritten.\n' $k > .lacarta/specs/$k.md; done
+> printf 'Fine.\n' > review.md
+$ phase add --title "One" --goal "Something runs"
+$ review add --phase spec --type specification --verdict fail --report review.md --summary "Gaps"
+$ --agent A-1 finding add --phase spec --review specification --severity medium --title "Missing error cases" --spec functional
+$ status
+$ spec submit functional
+$ finding resolve F-1 --status fixed --note "Added section 4"
+$ status
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "Complete"
+$ spec submit functional
+$ plan submit
+> printf '# functional\n\nChanged.\n' > .lacarta/specs/functional.md
+$ status
+$ spec submit functional
+$ phase add --title "Two" --goal "More"
+$ plan reopen --reason "User wants a second phase"
+$ phase add --title "Two" --goal "More"
+$ status
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "Complete again"
+$ status
+$ finding add --phase spec --review specification --severity critical --title "No auth model" --scenario "Anyone can read invoices" --recommendation "Specify sessions"
+$ status
+$ answer Q-4 --choice "Stop the project"
+$ status
+$ spec submit functional
+$ decisions

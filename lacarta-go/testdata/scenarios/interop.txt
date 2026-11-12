@@ -1,0 +1,29 @@
+# Go and the prototype alternate on one project: each reads what the other wrote, including
+# the hashes that tie the spec review to the exact text it judged (non-ASCII on purpose).
+% init --name "Écrans"
+> for k in functional architecture stack security; do printf '# %s — écrit\n\nWritten.\n' $k > .lacarta/specs/$k.md; done
+> printf 'Fine.\n' > review.md
+$ phase add --title "Écrans – UI" --goal "Ça marche" --scope "Liste « factures »" --covers FR-1
+% phase add --title "Export 📄" --goal "PDF"
+% review add --phase spec --type specification --verdict pass --report review.md --summary "Complete"
+$ status
+$ spec submit functional
+% spec submit architecture
+$ spec submit stack
+% spec submit security
+$ plan submit
+% answer Q-1 --choice Approve
+$ answer Q-2 --choice Approve
+% answer Q-3 --choice Approve
+$ answer Q-4 --choice Approve
+% status
+$ answer Q-5 --choice Approve
+% status
+% phase start 1
+$ agent start --role implementation --task "Build « Écrans »" --phase 1
+% agent list
+$ --agent A-2 ask --title "Couleur ?" --option "Bleu|Calme" --option "Rouge|Vif"
+% answer Q-6 --choice Bleu --comment "très bien"
+$ wait Q-6
+% decisions
+$ decisions

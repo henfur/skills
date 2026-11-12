@@ -1,0 +1,139 @@
+$ hook session-start <<< {"session_id":"s-1","cwd":"$W/app","transcript_path":"/nowhere.jsonl","source":"startup"}
+{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "lacarta: this session is registered in the lacarta console (not running (start it with `serve`)) as the single agent project \"app\" (<TASK>). The user can follow it there and write to you from it: those messages start with \"[lacarta console]\" and are the user's own words. If `$LACARTA_PROJECT` is empty in your shell, pass `--project <TASK>` to lacarta commands.\nIf the user asks to build a new project, app or service, or wants specs or a structured, reviewed process, load the `lacarta` skill. When you need a decision while the user may be away from the terminal, ask in the console: `<L> ask --title \"...\" --option \"Label|what it means\"`, then run `<L> wait` as a background command."}}
+[exit 0]
+
+$ status
+app: single-agent task in <W>/app, active
+Remote control: off; console messages waiting: 0
+
+Next: Work on the task with the user.
+[exit 0]
+
+$ hook prompt <<< {"session_id":"s-1","prompt":"/model opus"}
+[exit 0]
+
+$ hook prompt <<< {"session_id":"s-1","prompt":"Fix the login bug — it loops forever when the session cookie expires and the user is sent back again and again\nmore detail"}
+[exit 0]
+
+$ status
+Fix the login bug — it loops forever when the session cookie expires a…: single-agent task in <W>/app, active
+Remote control: off; console messages waiting: 0
+
+Next: Work on the task with the user.
+[exit 0]
+
+$ hook notification <<< {"session_id":"s-1","message":"Claude needs your permission to use Bash"}
+[exit 0]
+
+$ agent list
+  A-1   Ada        agent                    opus    terminal Works on the task with you.
+[exit 0]
+
+$ hook post-tool <<< {"session_id":"s-1","tool_name":"Bash"}
+[exit 0]
+
+$ agent list
+  A-1   Ada        agent                    opus    working  Works on the task with you.
+[exit 0]
+
+$ hook post-tool <<< {"session_id":"s-1"}
+[exit 0]
+
+$ status
+Fix the login bug — it loops forever when the session cookie expires a…: single-agent task in <W>/app, active
+Remote control: off; console messages waiting: 2
+
+Next: The user sent messages from the console: `inbox` shows them. Treat them as the user's words.
+[exit 0]
+
+$ hook post-tool <<< {"session_id":"s-1"}
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "[lacarta console] The user wrote from the lacarta console. Treat it exactly as if they had typed it here:\n\nAlso check the logout path\n\nAnd the tests"}}
+[exit 0]
+
+$ hook post-tool <<< {"session_id":"s-1"}
+[exit 0]
+
+$ hook stop <<< {"session_id":"s-1"}
+{"decision": "block", "reason": "[lacarta console] The user wrote from the lacarta console. Treat it exactly as if they had typed it here:\n\nOne more thing"}
+[exit 0]
+
+$ hook stop <<< {"session_id":"s-1"}
+[exit 0]
+
+$ agent list
+  A-1   Ada        agent                    opus    idle     Works on the task with you.
+[exit 0]
+
+$ ask --title "Still needed?"
+Q-1
+[exit 0]
+
+$ hook session-start <<< {"session_id":"s-1","cwd":"$W/app","transcript_path":"","source":"resume"}
+{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "lacarta: this session is registered in the lacarta console (not running (start it with `serve`)) as the single agent project \"Fix the login bug \u2014 it loops forever when the session cookie expires a\u2026\" (<TASK>). The user can follow it there and write to you from it: those messages start with \"[lacarta console]\" and are the user's own words. If `$LACARTA_PROJECT` is empty in your shell, pass `--project <TASK>` to lacarta commands.\nIf the user asks to build a new project, app or service, or wants specs or a structured, reviewed process, load the `lacarta` skill. When you need a decision while the user may be away from the terminal, ask in the console: `<L> ask --title \"...\" --option \"Label|what it means\"`, then run `<L> wait` as a background command.\nQuestions still open in the console: Q-1."}}
+[exit 0]
+
+$ hook session-end <<< {"session_id":"s-1","reason":"prompt_input_exit"}
+[exit 0]
+
+$ status
+Fix the login bug — it loops forever when the session cookie expires a…: single-agent task in <W>/app, ended
+Remote control: off; console messages waiting: 0
+
+Next: The session ended.
+[exit 0]
+
+$ hook session-start <<< {"session_id":"s-1","cwd":"$W/app","transcript_path":"","source":"resume"}
+{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "lacarta: this session is registered in the lacarta console (not running (start it with `serve`)) as the single agent project \"Fix the login bug \u2014 it loops forever when the session cookie expires a\u2026\" (<TASK>). The user can follow it there and write to you from it: those messages start with \"[lacarta console]\" and are the user's own words. If `$LACARTA_PROJECT` is empty in your shell, pass `--project <TASK>` to lacarta commands.\nIf the user asks to build a new project, app or service, or wants specs or a structured, reviewed process, load the `lacarta` skill. When you need a decision while the user may be away from the terminal, ask in the console: `<L> ask --title \"...\" --option \"Label|what it means\"`, then run `<L> wait` as a background command."}}
+[exit 0]
+
+$ status
+Fix the login bug — it loops forever when the session cookie expires a…: single-agent task in <W>/app, ended
+Remote control: off; console messages waiting: 0
+
+Next: The session ended.
+[exit 0]
+
+$ --root proj init --name "Proj"
+Initialised <W>/proj/.lacarta as project proj-0ac2
+Spec templates: <W>/proj/.lacarta/specs
+Console: not running; start it with `serve`
+Next: tell the user the console URL, then ask what the project is (unless they already said).
+[exit 0]
+
+$ hook session-start <<< {"session_id":"s-2","cwd":"$W/proj/sub","transcript_path":"","source":"startup"}
+{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "lacarta: this session is registered in the lacarta console (not running (start it with `serve`)) as the software development project \"Proj\" (proj-0ac2). The user can follow it there and write to you from it: those messages start with \"[lacarta console]\" and are the user's own words. If `$LACARTA_PROJECT` is empty in your shell, pass `--project proj-0ac2` to lacarta commands.\nThis folder is a lacarta software project: load the `lacarta` skill now and follow it. Run `<L> status` first."}}
+[exit 0]
+
+$ --root proj agent list
+  A-1   Ada        orchestrator             opus    working  Runs the framework and talks to you.
+[exit 0]
+
+$ hook session-end <<< {"session_id":"s-2"}
+[exit 0]
+
+$ --root proj agent list
+  A-1   Ada        orchestrator             opus    idle     Runs the framework and talks to you.
+[exit 0]
+
+$ hook prompt <<< {"session_id":"s-3","cwd":"$W/proj","prompt":"hello"}
+[exit 0]
+
+$ --root proj status
+Proj: stage specification
+
+Specs:
+  functional    draft              rev 0  (13 TODO lines)
+  architecture  draft              rev 0  (15 TODO lines)
+  stack         draft              rev 0  (13 TODO lines)
+  security      draft              rev 0  (14 TODO lines)
+
+Spec review: none
+
+Phase plan: draft
+
+Next: Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/architecture.md, .lacarta/specs/stack.md, .lacarta/specs/security.md still have TODOs.
+[exit 0]
+
+$ hook prompt <<< not json
+[exit 0]
+

@@ -1,0 +1,7 @@
+# A state file from before models moved to Settings still loads: the setup question is withdrawn.
+$ init --name legacy
+> python3 -c "import json;p='.lacarta/state.json';s=json.load(open(p));s.pop('template');s.pop('inbox');s['models']={'confirmed':False,'roles':{'orchestrator':'opus'}};s['questions'].append({'id':'Q-1','kind':'validation','title':'Choose the models for this project','body':'','options':['Use these models'],'allow_free':False,'context':{'stage':'specification'},'effect':{'type':'models-confirm'},'status':'open','asked_at':'2026-11-01T00:00:00Z','answer':None});s['counters']['Q']=1;json.dump(s,open(p,'w'),indent=2)"
+$ status
+$ wait
+$ ask --title "Name?"
+$ status

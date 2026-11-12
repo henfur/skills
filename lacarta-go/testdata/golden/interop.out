@@ -1,0 +1,275 @@
+% init --name "Écrans"
+Initialised <W>/.lacarta as project ã-crans-fca8
+Spec templates: <W>/.lacarta/specs
+Console: not running; start it with `serve`
+Next: tell the user the console URL, then ask what the project is (unless they already said).
+[exit 0]
+
+$ phase add --title "Écrans – UI" --goal "Ça marche" --scope "Liste « factures »" --covers FR-1
+Phase 1 added.
+[exit 0]
+
+% phase add --title "Export 📄" --goal "PDF"
+Phase 2 added.
+[exit 0]
+
+% review add --phase spec --type specification --verdict pass --report review.md --summary "Complete"
+R-1 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ status
+Ãcrans: stage specification
+
+Specs:
+  functional    draft              rev 0
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: passed
+
+Phase plan: draft
+  1. Ãcrans â UI                           planned            functional:- security:-
+  2. Export ð                              planned            functional:- security:-
+
+Next: Spec review passed: submit for approval with `spec submit` (functional, architecture, stack, security).
+[exit 0]
+
+$ spec submit functional
+Q-1 asks the user to approve the functional spec. `wait Q-1`.
+[exit 0]
+
+% spec submit architecture
+Q-2 asks the user to approve the architecture spec. `wait Q-2`.
+[exit 0]
+
+$ spec submit stack
+Q-3 asks the user to approve the stack spec. `wait Q-3`.
+[exit 0]
+
+% spec submit security
+Q-4 asks the user to approve the security spec. `wait Q-4`.
+[exit 0]
+
+$ plan submit
+Q-5 asks the user to approve the plan. `wait Q-5`.
+[exit 0]
+
+% answer Q-1 --choice Approve
+Q-1 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ answer Q-2 --choice Approve
+Q-2 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+% answer Q-3 --choice Approve
+Q-3 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ answer Q-4 --choice Approve
+Q-4 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+% status
+Ãcrans: stage specification
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: in-review
+  1. Ãcrans â UI                           planned            functional:- security:-
+  2. Export ð                              planned            functional:- security:-
+
+Open questions:
+  Q-5 [validation] Approve the phase plan (2 phases)?
+
+Next: Wait for the user to answer Q-5 in the console.
+[exit 0]
+
+$ answer Q-5 --choice Approve
+Q-5 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+% status
+Ãcrans: stage implementation
+
+Specs:
+  functional    approved           rev 1
+  architecture  approved           rev 1
+  stack         approved           rev 1
+  security      approved           rev 1
+
+Spec review: passed
+
+Phase plan: approved
+  1. Ãcrans â UI                           planned            functional:- security:-
+  2. Export ð                              planned            functional:- security:-
+
+Next: `phase start 1`.
+[exit 0]
+
+% phase start 1
+Phase 1 started.
+[exit 0]
+
+$ agent start --role implementation --task "Build « Écrans »" --phase 1
+A-2 Basil: implementation on Opus 5.5 (Agent tool model: opus).
+Tell the subagent its name is Basil and to run every lacarta command as `<L> --agent A-2 <command>`.
+When it returns: `agent done A-2 --summary "..."` (or `--failed`).
+[exit 0]
+
+% agent list
+  A-1   Ada        orchestrator             opus    working  Runs the framework and talks to you.
+  A-2   Basil      implementation           opus    working  Build Â« Ãcrans Â»
+[exit 0]
+
+$ --agent A-2 ask --title "Couleur ?" --option "Bleu|Calme" --option "Rouge|Vif"
+Q-6
+[exit 0]
+
+% answer Q-6 --choice Bleu --comment "très bien"
+Q-6 answered on the user's behalf; the console shows it as given in the terminal.
+[exit 0]
+
+$ wait Q-6
+{
+  "id": "Q-6",
+  "title": "Couleur ?",
+  "choice": "Bleu",
+  "comment": "tr\u00c3\u00a8s bien",
+  "by": "user (terminal)",
+  "at": "<TS>"
+}
+Next: Phase 1 in progress: finish its scope, then run the functional and security review(s) and record them with `review add`.
+[exit 0]
+
+% decisions
+# Decision log: Ãcrans
+
+## D-1: Approve the Functional spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: functional)
+- Question asked:
+
+  > Read it under Specifications → Functional.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-2: Approve the Architecture & design spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: architecture)
+- Question asked:
+
+  > Read it under Specifications → Architecture & design.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-3: Approve the Tech stack spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: stack)
+- Question asked:
+
+  > Read it under Specifications → Tech stack.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-4: Approve the Security & threat model spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: security)
+- Question asked:
+
+  > Read it under Specifications → Security & threat model.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-5: Approve the phase plan (2 phases)?
+
+- Decided by: user (terminal), <TS>
+- Question asked:
+
+  > 1. **Ãcrans â UI**: Ãa marche
+  > 2. **Export ð**: PDF
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-6: Couleur ?
+
+- Decided by: user (terminal), <TS>
+- Decision: Bleu
+- Rationale or comment: trÃ¨s bien
+
+[exit 0]
+
+$ decisions
+# Decision log: Ãcrans
+
+## D-1: Approve the Functional spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: functional)
+- Question asked:
+
+  > Read it under Specifications → Functional.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-2: Approve the Architecture & design spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: architecture)
+- Question asked:
+
+  > Read it under Specifications → Architecture & design.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-3: Approve the Tech stack spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: stack)
+- Question asked:
+
+  > Read it under Specifications → Tech stack.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-4: Approve the Security & threat model spec (revision 1)?
+
+- Decided by: user (terminal), <TS> (spec: security)
+- Question asked:
+
+  > Read it under Specifications → Security & threat model.
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-5: Approve the phase plan (2 phases)?
+
+- Decided by: user (terminal), <TS>
+- Question asked:
+
+  > 1. **Ãcrans â UI**: Ãa marche
+  > 2. **Export ð**: PDF
+
+  Options: Approve / Request changes
+- Decision: Approve
+
+## D-6: Couleur ?
+
+- Decided by: user (terminal), <TS>
+- Decision: Bleu
+- Rationale or comment: trÃ¨s bien
+
+[exit 0]
+

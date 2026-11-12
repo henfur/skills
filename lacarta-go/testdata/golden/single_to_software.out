@@ -1,0 +1,38 @@
+$ ask --title "Left open"
+Q-1
+[exit 0]
+
+$ --root app init --name "App"
+Initialised <W>/app/.lacarta as project app-3704
+Spec templates: <W>/app/.lacarta/specs
+Console: not running; start it with `serve`
+Next: tell the user the console URL, then ask what the project is (unless they already said).
+[exit 0]
+
+$ --project $LACARTA_PROJECT status
+app: single-agent task in <W>/app, ended
+Remote control: on; console messages waiting: 0
+
+Next: The session ended.
+[exit 0]
+
+$ --root app status
+App: stage specification
+
+Specs:
+  functional    draft              rev 0  (13 TODO lines)
+  architecture  draft              rev 0  (15 TODO lines)
+  stack         draft              rev 0  (13 TODO lines)
+  security      draft              rev 0  (14 TODO lines)
+
+Spec review: none
+
+Phase plan: draft
+
+Next: Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/architecture.md, .lacarta/specs/stack.md, .lacarta/specs/security.md still have TODOs.
+[exit 0]
+
+$ --root app agent list
+  A-1   Ada        orchestrator             opus    working  Runs the framework and talks to you.
+[exit 0]
+

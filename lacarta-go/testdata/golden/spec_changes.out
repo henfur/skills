@@ -1,0 +1,229 @@
+$ init --name demo
+Initialised <W>/.lacarta as project demo-87cc
+Spec templates: <W>/.lacarta/specs
+Console: not running; start it with `serve`
+Next: tell the user the console URL, then ask what the project is (unless they already said).
+[exit 0]
+
+$ phase add --title "One" --goal "Something runs"
+Phase 1 added.
+[exit 0]
+
+$ review add --phase spec --type specification --verdict fail --report review.md --summary "Gaps"
+R-1 recorded (fail). Record each finding with `finding add`.
+[exit 0]
+
+$ --agent A-1 finding add --phase spec --review specification --severity medium --title "Missing error cases" --spec functional
+F-1 recorded.
+[exit 0]
+
+$ status
+demo: stage specification
+
+Specs:
+  functional    draft              rev 0
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: failed
+
+Phase plan: draft
+  1. One                                      planned            functional:- security:-
+
+Unresolved findings:
+  F-1 medium   open      phase spec: Missing error cases
+
+Next: The last spec review failed: fix its findings. Spawn a fresh spec reviewer with no memory (references/spec-review.md) and record it with `review add --phase spec --type specification`.
+[exit 0]
+
+$ spec submit functional
+stderr: Refused: The latest specification review failed or has unresolved findings. Run a fresh spec reviewer (references/spec-review.md) first.
+[exit 2]
+
+$ finding resolve F-1 --status fixed --note "Added section 4"
+F-1 fixed.
+[exit 0]
+
+$ status
+demo: stage specification
+
+Specs:
+  functional    draft              rev 0
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: failed
+
+Phase plan: draft
+  1. One                                      planned            functional:- security:-
+
+Next: The last spec review failed: fix its findings. Spawn a fresh spec reviewer with no memory (references/spec-review.md) and record it with `review add --phase spec --type specification`.
+[exit 0]
+
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "Complete"
+R-2 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ spec submit functional
+Q-1 asks the user to approve the functional spec. `wait Q-1`.
+[exit 0]
+
+$ plan submit
+Q-2 asks the user to approve the plan. `wait Q-2`.
+[exit 0]
+
+$ status
+demo: stage specification
+
+Specs:
+  functional    in-review          rev 1
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: stale
+
+Phase plan: in-review
+  1. One                                      planned            functional:- security:-
+
+Open questions:
+  Q-1 [validation] Approve the Functional spec (revision 1)?
+  Q-2 [validation] Approve the phase plan (1 phases)?
+
+Next: The specs changed since the last spec review. Spawn a fresh spec reviewer with no memory (references/spec-review.md) and record it with `review add --phase spec --type specification`.
+[exit 0]
+
+$ spec submit functional
+stderr: Refused: The functional spec is already in-review.
+[exit 2]
+
+$ phase add --title "Two" --goal "More"
+stderr: Refused: The phase plan is approved. Changing it is a decision: `ask` the user first, then `plan reopen`.
+[exit 2]
+
+$ plan reopen --reason "User wants a second phase"
+Plan reopened. Edit phases, then `plan submit`.
+[exit 0]
+
+$ phase add --title "Two" --goal "More"
+Phase 2 added.
+[exit 0]
+
+$ status
+demo: stage specification
+
+Specs:
+  functional    changed            rev 1
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: stale
+
+Phase plan: draft
+  1. One                                      planned            functional:- security:-
+  2. Two                                      planned            functional:- security:-
+
+Open questions:
+  Q-2 [validation] Approve the phase plan (1 phases)?
+
+Next: The specs changed since the last spec review. Spawn a fresh spec reviewer with no memory (references/spec-review.md) and record it with `review add --phase spec --type specification`.
+[exit 0]
+
+$ review add --phase spec --type specification --verdict pass --report review.md --summary "Complete again"
+R-3 recorded (pass). Record each finding with `finding add`.
+[exit 0]
+
+$ status
+demo: stage specification
+
+Specs:
+  functional    changed            rev 1
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: passed
+
+Phase plan: draft
+  1. One                                      planned            functional:- security:-
+  2. Two                                      planned            functional:- security:-
+
+Open questions:
+  Q-2 [validation] Approve the phase plan (1 phases)?
+
+Next: Spec review passed: submit for approval with `spec submit` (functional, architecture, stack, security).
+[exit 0]
+
+$ finding add --phase spec --review specification --severity critical --title "No auth model" --scenario "Anyone can read invoices" --recommendation "Specify sessions"
+F-2 recorded. BLOCKING: development stops. Q-3 asks the user to decide. Stop writing code and `wait Q-3`.
+[exit 0]
+
+$ status
+demo: stage specification
+BLOCKED: Unresolved high or critical finding: F-2 (critical).
+
+Specs:
+  functional    changed            rev 1
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: failed
+
+Phase plan: draft
+  1. One                                      planned            functional:- security:-
+  2. Two                                      planned            functional:- security:-
+
+Open questions:
+  Q-2 [validation] Approve the phase plan (1 phases)?
+  Q-3 [decision] F-2: No auth model
+
+Unresolved findings:
+  F-2 critical open      phase spec: No auth model
+
+Next: Blocked: wait for the user's decision on Q-3 (`wait Q-3`). Do not write code.
+[exit 0]
+
+$ answer Q-4 --choice "Stop the project"
+stderr: Refused: No question Q-4.
+[exit 2]
+
+$ status
+demo: stage specification
+BLOCKED: Unresolved high or critical finding: F-2 (critical).
+
+Specs:
+  functional    changed            rev 1
+  architecture  draft              rev 0
+  stack         draft              rev 0
+  security      draft              rev 0
+
+Spec review: failed
+
+Phase plan: draft
+  1. One                                      planned            functional:- security:-
+  2. Two                                      planned            functional:- security:-
+
+Open questions:
+  Q-2 [validation] Approve the phase plan (1 phases)?
+  Q-3 [decision] F-2: No auth model
+
+Unresolved findings:
+  F-2 critical open      phase spec: No auth model
+
+Next: Blocked: wait for the user's decision on Q-3 (`wait Q-3`). Do not write code.
+[exit 0]
+
+$ spec submit functional
+stderr: Refused: The latest specification review failed or has unresolved findings. Run a fresh spec reviewer (references/spec-review.md) first.
+[exit 2]
+
+$ decisions
+# Decision log: demo
+
+No decisions recorded.
+[exit 0]
+

@@ -959,7 +959,8 @@ def session_context(pid, store):
     kind = KINDS[state["template"]]["label"].lower()
     lines = [f"lacarta: this session is registered in the lacarta console ({url}) as the {kind} project "
              f"\"{state['project']['name']}\" ({pid}). The user can follow it there and write to you from it: "
-             f"those messages start with \"{CONSOLE_TAG}\" and are the user's own words."]
+             f"those messages start with \"{CONSOLE_TAG}\" and are the user's own words. If `$LACARTA_PROJECT` "
+             f"is empty in your shell, pass `--project {pid}` to lacarta commands."]
     if state["template"] == SOFTWARE:
         lines.append(f"This folder is a lacarta software project: load the `lacarta` skill now and follow it. "
                      f"Run `{L} status` first.")
@@ -1150,7 +1151,7 @@ def daemon_info():
 
 def ensure_daemon():
     info = daemon_info()
-    if info:
+    if info or os.environ.get("LACARTA_NO_DAEMON"):    # tests run without a console
         return info
     HOME.mkdir(parents=True, exist_ok=True)
     with open(HOME / "daemon.log", "a") as log_file:

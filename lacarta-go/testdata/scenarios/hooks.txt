@@ -1,0 +1,42 @@
+# Every Claude Code hook event, on a single-agent task and on a software project.
+> mkdir -p app proj/sub && echo '{"remote_control": false}' > .home/settings.json
+@set CLAUDE_ENV_FILE=$W/env
+$ hook session-start <<< {"session_id":"s-1","cwd":"$W/app","transcript_path":"/nowhere.jsonl","source":"startup"}
+@env env
+$ status
+$ hook prompt <<< {"session_id":"s-1","prompt":"/model opus"}
+$ hook prompt <<< {"session_id":"s-1","prompt":"Fix the login bug — it loops forever when the session cookie expires and the user is sent back again and again\nmore detail"}
+$ status
+$ hook notification <<< {"session_id":"s-1","message":"Claude needs your permission to use Bash"}
+$ agent list
+$ hook post-tool <<< {"session_id":"s-1","tool_name":"Bash"}
+$ agent list
+$ hook post-tool <<< {"session_id":"s-1"}
+> python3 -c "import sys,json;sys.argv=['x'];sys.path.insert(0,'$(dirname "$PYLACARTA")');import lacarta as l;from pathlib import Path;st=l.project_store('$LACARTA_PROJECT');exec('with st.edit() as s: l.add_message(s, \"Also check the logout path\"); l.add_message(s, \"And the tests\")')"
+$ status
+$ hook post-tool <<< {"session_id":"s-1"}
+$ hook post-tool <<< {"session_id":"s-1"}
+> python3 -c "import sys;sys.path.insert(0,'$(dirname "$PYLACARTA")');import lacarta as l;st=l.project_store('$LACARTA_PROJECT');exec('with st.edit() as s: l.add_message(s, \"One more thing\")')"
+$ hook stop <<< {"session_id":"s-1"}
+$ hook stop <<< {"session_id":"s-1"}
+$ agent list
+$ ask --title "Still needed?"
+$ hook session-start <<< {"session_id":"s-1","cwd":"$W/app","transcript_path":"","source":"resume"}
+$ hook session-end <<< {"session_id":"s-1","reason":"prompt_input_exit"}
+$ status
+$ hook session-start <<< {"session_id":"s-1","cwd":"$W/app","transcript_path":"","source":"resume"}
+$ status
+# A session in a software project joins it as the orchestrator.
+@unset LACARTA_PROJECT
+$ --root proj init --name "Proj"
+> : > env
+$ hook session-start <<< {"session_id":"s-2","cwd":"$W/proj/sub","transcript_path":"","source":"startup"}
+> cat env
+$ --root proj agent list
+$ hook session-end <<< {"session_id":"s-2"}
+$ --root proj agent list
+# A session nobody registered (hooks installed mid-session) registers on its first event.
+$ hook prompt <<< {"session_id":"s-3","cwd":"$W/proj","prompt":"hello"}
+$ --root proj status
+$ hook prompt <<< not json
+> cat .home/hooks.log | grep -c prompt || true

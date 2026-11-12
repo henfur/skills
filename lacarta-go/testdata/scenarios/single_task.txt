@@ -1,0 +1,18 @@
+# A session outside any software project becomes a single-agent task (created here by the
+# prototype's real hook), then turns into a software project with `init`.
+> mkdir -p app && echo '{"session_id":"s-1","cwd":"'"$W"'/app","transcript_path":"","source":"startup"}' | CLAUDE_ENV_FILE="$W/env" python3 "$PYLACARTA" hook session-start > /dev/null
+@env env
+$ status
+$ ask --title "Which fix?" --option "Patch|Small change" --option "Rewrite|Cleaner"
+$ phase add --title x --goal y
+$ agent start --role implementation --task x
+$ models
+$ models --json
+$ inbox
+$ status
+$ answer Q-1 --choice Rewrite
+$ wait
+$ decisions
+$ agent list
+$ --project $LACARTA_PROJECT status
+$ --root app status
