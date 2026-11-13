@@ -1,6 +1,7 @@
 # Design: the security-audit kind and plugins
 
-Status: **draft, user's answers to O-2 to O-5 folded in** (2026-11-12). Nothing here is implemented yet. It is phase 5 of the
+Status: **first version implemented** (2026-11-13). See "Implementation status" below for what was built, how it differs
+from this design, and what is left.
 [handoff](../../../docs/next-steps.md) and the first real test of the `Kind` interface sketched in
 [go-port-plan.md](../../../docs/go-port-plan.md#kinds).
 
@@ -10,6 +11,45 @@ Sources:
   identical to that commit.
 - [Build your own vulnerability harness](https://blog.cloudflare.com/build-your-own-vulnerability-harness) (Cloudflare blog,
   2026-06-18): how that skill grew into their fleet harness (VDH + VVS).
+
+## Implementation status
+
+Built and tested (`go test ./...`, including `internal/cli/audit_test.go`, which drives a whole audit through the real skill
+validators in the real sandbox; Playwright `web/app/tests/audit.spec.js`, which reviews, approves and checks the signed report):
+
+| Part | Where |
+| --- | --- |
+| Kind `audit` ("Security audit"): stages scope → recon → coverage-plan → hunt → review → report → done, roles, `Next:` lines, state in `~/.lacarta/audits/<id>/` with runs in `run-N/` | `internal/core/audit.go` |
+| Gates: rules of engagement and coverage plan (questions with Approve / Request changes), the skill's validators on `audit plan submit` and `audit findings submit`, no open ledger unit before findings | `internal/core/audit.go`, `internal/cli/audit.go` |
+| Auditor review per finding (accept, change severity, reject, ask for another check; keep, confirm, out of scope), reasons required, recheck loop back to the agents | `core.ReviewFinding`, console `ReviewCard` |
+| Plugins: built-in definitions (security-audit required, pinned to `c1c8a8c` by content hash; gitleaks and osv-scanner default on), adopt existing installs, install by git clone, custom skills and companions with a preview before `--trust`, per-project enable/disable with version pins, required ones locked | `internal/plugins` |
+| Preflight: skill files and version, node, sandbox, validator self-test (cached per skill version) | `plugins.Preflight` |
+| Sandbox: bubblewrap + prlimit, loopback-only network, empty environment, home hidden, target read-only, writes only to scratch; used for validators, check tools and `lacarta sandbox run` | `internal/sandbox` |
+| Report: deterministic markdown from the records and reviews, print-ready HTML (watermark and footer on every page), PDF through headless Chromium when installed, the fixed AI-assistance disclosure in front matter, cover, every finding, the method section and the verification section | `internal/auditreport` |
+| Approval: console only, needs the auditor name from Settings, the draft hash the auditor read, a confirmation checkbox; writes `final/vN/` with `report.provenance.json`, its SSHSIG signature (Ed25519, verified by `ssh-keygen -Y verify` in tests) and `allowed_signers`; `lacarta audit verify` checks signature, hashes and disclosure | `auditreport.Approve`, `auditreport.Verify`, `internal/provenance` |
+| Console: Overview, Coverage (matrix, units, architecture map), Findings (with review cards), Report (summary editor, draft, approval, downloads), Plugins; Settings → Auditor and machine plugins | `web/app/src/views/Audit*.svelte`, `Coverage`, `Report`, `Plugins` |
+| CLI: `audit init|preflight|guide|scope|plan submit|findings submit|summary|brief|checks|rerun|verify`, `wish`, `plugin list|install|add|remove|enable|disable`, `sandbox run` | `internal/cli/audit.go` |
+
+Differences from the design:
+- The kind's id is `audit`, not `security-audit` (the plugin keeps that name).
+- The `Kind` interface was **not** extracted: the audit kind branches in `Refresh`, `NextAction` and `DeriveState` like the
+  others. Extract it when the next kind arrives.
+- Reviews and approval are **console only** (no CLI command), so the orchestrator can't record them for the auditor.
+- Hunting, validation and record verification are one stage ("Hunting & validation"): lacarta can't tell the skill's phases 2
+  to 5 apart from its files, and doesn't need to.
+- PDFs: no Chromium on the dev machine, so PDF printing is untested; the HTML print page and the browser's "Save as PDF" work.
+  PDF XMP metadata and embedded attachments need PDF writing and are left with O-9.
+
+Left to do:
+- Run gitleaks and osv-scanner for real (not installed on the dev machine; their command lines follow their documentation and
+  are untested). The osv-scanner database download parses copies of the lockfiles outside the sandbox.
+- A "New audit" dialog in the console (today: `lacarta audit init` in a terminal or by the agent) and installing plugins from
+  the console (today: `plugin install|add` in a terminal).
+- Deterministic health checks of §4.5 beyond the validators (shallow hunters, cited paths exist, transcripts ending on an API
+  error) and the budget warning before a wave.
+- `lacarta sandbox promote` (§6).
+- O-1 (hiding disabled skills from Claude Code), O-8 and O-9 (see `docs/next-steps.md`).
+- A real audit of a small repository end to end with an agent.
 
 ## 1. Goals and non-goals
 

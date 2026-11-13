@@ -143,6 +143,10 @@ func applyEffect(st *State, q *Question) error {
 		return nil
 	}
 	choice, comment := q.Answer.Choice, q.Answer.Comment
+	if strings.HasPrefix(e.Type, "audit-") {
+		applyAuditEffect(st, q)
+		return nil
+	}
 	switch e.Type {
 	case "spec-approval":
 		s := st.Spec(e.Spec)

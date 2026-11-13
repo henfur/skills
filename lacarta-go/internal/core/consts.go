@@ -125,9 +125,12 @@ var Kinds = []Kind{
 	{Software, "Software development",
 		"Specs, a phase plan, phases gated by functional and security reviews, a final review.",
 		SoftwareRoles},
+	{Audit, "Security audit",
+		"Cloudflare's security-audit skill run end to end, a coverage plan you approve, your review of every finding, " +
+			"and a signed report you approve.", AuditRoles},
 }
 
-var PlannedKinds = []string{"Security audit", "DevOps (Ansible, Terraform)"}
+var PlannedKinds = []string{"DevOps (Ansible, Terraform)"}
 
 func KindByID(id string) Kind {
 	for _, k := range Kinds {

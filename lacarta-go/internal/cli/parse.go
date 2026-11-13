@@ -164,6 +164,12 @@ func parse(cmds []*Cmd, argv []string) (*Args, error) {
 		if tok == "-h" || tok == "--help" {
 			return nil, errHelp{cmd}
 		}
+		if tok == "--" && len(cmd.Pos) > 0 && cmd.Pos[len(cmd.Pos)-1].Many {
+			// Everything after `--` belongs to the last positional, dashes included (`sandbox run -- cmd -x`).
+			last := cmd.Pos[len(cmd.Pos)-1].Name
+			a.pos[last] = append(a.pos[last], argv[i+1:]...)
+			break
+		}
 		if strings.HasPrefix(tok, "--") && len(tok) > 2 {
 			name, val, hasVal := strings.Cut(tok[2:], "=")
 			idx := slices.IndexFunc(cmd.Opts, func(o Opt) bool { return o.Name == name })

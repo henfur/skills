@@ -120,6 +120,17 @@ func getJSON(t *testing.T, url string) any {
 	return v
 }
 
+// dropAuditKind removes what the security-audit kind added after the prototype was frozen:
+// the kind in the catalog, its models in the settings, and the plugins.
+func dropAuditKind(hub any) {
+	h := hub.(map[string]any)
+	cat := h["catalog"].(map[string]any)
+	delete(cat["kinds"].(map[string]any), "audit")
+	cat["planned"] = append([]any{"Security audit"}, cat["planned"].([]any)...)
+	delete(h["settings"].(map[string]any)["models"].(map[string]any), "audit")
+	delete(h, "plugins")
+}
+
 // TestAPIParity runs the prototype's daemon and the Go handler on the same state files and
 // compares what the console receives.
 func TestAPIParity(t *testing.T) {
@@ -152,6 +163,9 @@ func TestAPIParity(t *testing.T) {
 
 	for _, path := range []string{"/api/hub", "/api/p/" + taskID + "/state", "/api/p/" + softID + "/state"} {
 		want, got := getJSON(t, pyURL+path), getJSON(t, goSrv.URL+path)
+		if path == "/api/hub" {
+			dropAuditKind(got)
+		}
 		if diffs := compare("", want, got); len(diffs) > 0 {
 			t.Errorf("%s differs from the prototype:\n  %s", path, strings.Join(diffs, "\n  "))
 		}

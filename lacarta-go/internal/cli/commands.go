@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,9 +31,11 @@ var softwareOnly = map[string]bool{"spec": true, "plan": true, "phase": true, "r
 
 func roleChoices() []string {
 	out := []string{}
-	for _, r := range core.SoftwareRoles {
-		if r.ID != "orchestrator" {
-			out = append(out, r.ID)
+	for _, k := range core.Kinds {
+		for _, r := range k.Roles {
+			if r.ID != "orchestrator" && r.ID != "agent" && !slices.Contains(out, r.ID) {
+				out = append(out, r.ID)
+			}
 		}
 	}
 	return out
@@ -55,7 +58,7 @@ func aliases() string {
 }
 
 func commands() []*Cmd {
-	return []*Cmd{
+	cmds := []*Cmd{
 		{Name: "init", Help: "Create .lacarta/ with spec templates.", Run: cmdInit, Opts: []Opt{
 			{Name: "name", Help: "Project name (default: the folder's name)."}, {Name: "summary"}}},
 		{Name: "status", Help: "Stage, gates, open items and the next expected action.", Run: cmdStatus,
@@ -143,6 +146,7 @@ func commands() []*Cmd {
 		{Name: "final start", Run: cmdFinalStart},
 		{Name: "final complete", Run: cmdFinalComplete, Opts: []Opt{{Name: "summary"}}},
 	}
+	return append(cmds, auditCommands()...)
 }
 
 // Main runs the command line and returns the exit code.
@@ -191,9 +195,12 @@ func run(a *Args) error {
 	}
 	var err error
 	if store, err = resolveStore(a); err != nil {
-		return err
+		if !noProject[a.Cmd.Name] {
+			return err
+		}
+		store = nil // a stale $LACARTA_PROJECT doesn't matter to commands that need no project
 	}
-	if a.Cmd.Name == "models" {
+	if a.Cmd.Name == "models" || noProject[a.Cmd.Name] {
 		return a.Cmd.Run(a)
 	}
 	if store == nil {
@@ -400,6 +407,9 @@ func cmdStatus(a *Args) error {
 		}
 		a.Println(string(out))
 		return nil
+	}
+	if st.Template == core.Audit {
+		return auditStatus(a, st, d)
 	}
 	if st.Template == core.Single {
 		a.Printf("%s: single-agent task in %s, %s\n", st.Project.Name, st.Project.Cwd, st.Stage)
@@ -1268,10 +1278,16 @@ func cmdInbox(a *Args) error {
 
 func cmdAgentStart(a *Args) error {
 	var ag *core.Agent
+	kind := core.Software
 	err := store.Edit(func(st *core.State) error {
-		if st.Template != core.Software {
+		if st.Template == core.Single {
 			return core.Gate("A single-agent task has one agent; helpers you spawn are not tracked.")
 		}
+		if _, ok := core.KindByID(st.Template).Role(a.Str("role")); !ok {
+			return core.Gate("%s is not a role of %s projects. `models` lists them.", a.Str("role"),
+				strings.ToLower(core.KindByID(st.Template).Label))
+		}
+		kind = st.Template
 		var phase *core.PhaseRef
 		if v := a.Str("phase"); v != "" {
 			p, err := core.ParsePhase(v)
@@ -1286,7 +1302,7 @@ func cmdAgentStart(a *Args) error {
 	if err != nil {
 		return err
 	}
-	role, _ := core.KindByID(core.Software).Role(ag.Role)
+	role, _ := core.KindByID(kind).Role(ag.Role)
 	a.Printf("%s %s: %s on %s (Agent tool model: %s).\n", ag.ID, ag.Name, strings.ToLower(role.Label), core.ModelName(ag.Model), ag.Model)
 	a.Printf("Tell the subagent its name is %s and to run every lacarta command as `%s --agent %s <command>`.\n", ag.Name, self(), ag.ID)
 	a.Printf("When it returns: `agent done %s --summary \"...\"` (or `--failed`).\n", ag.ID)

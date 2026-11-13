@@ -151,6 +151,9 @@ func ProjectStore(pid string) (*Store, error) {
 	if !ok {
 		return nil, Gate("No project %s in %s.", pid, hubPath())
 	}
+	if p.Template == Audit {
+		return &Store{Root: p.Root, Dir: AuditHome(pid)}, nil
+	}
 	if p.Template == Single {
 		cwd := p.Cwd
 		if cwd == "" {
@@ -166,6 +169,7 @@ func ProjectStore(pid string) (*Store, error) {
 type Settings struct {
 	Models        OMap[*OMap[string]] `json:"models"`
 	RemoteControl bool                `json:"remote_control"`
+	Auditor       string              `json:"auditor,omitempty"` // the person who signs audit reports
 }
 
 func settingsPath() string { return filepath.Join(Home(), "settings.json") }
@@ -191,6 +195,7 @@ func SettingsRead() *Settings {
 	var saved struct {
 		Models        map[string]map[string]string `json:"models"`
 		RemoteControl *bool                        `json:"remote_control"`
+		Auditor       string                       `json:"auditor"`
 	}
 	if json.Unmarshal(b, &saved) != nil {
 		return s
@@ -210,6 +215,7 @@ func SettingsRead() *Settings {
 	if saved.RemoteControl != nil {
 		s.RemoteControl = *saved.RemoteControl
 	}
+	s.Auditor = saved.Auditor
 	return s
 }
 
@@ -244,6 +250,22 @@ func SettingsUpdate(models map[string]map[string]string, remote *bool) (*Setting
 		if remote != nil {
 			s.RemoteControl = *remote
 		}
+		out = s
+		return WriteJSON(settingsPath(), s)
+	})
+	return out, err
+}
+
+// SetAuditor records the name of the person who signs audit reports. Only the user sets it.
+func SetAuditor(name string) (*Settings, error) {
+	name = strings.TrimSpace(name)
+	if len([]rune(name)) > 120 {
+		return nil, Gate("That name is too long.")
+	}
+	var out *Settings
+	err := HubEdit(func(*Hub) error {
+		s := SettingsRead()
+		s.Auditor = name
 		out = s
 		return WriteJSON(settingsPath(), s)
 	})

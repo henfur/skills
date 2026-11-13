@@ -160,6 +160,9 @@ func SpecReviewStatus(st *State, s *Store) (string, error) {
 // Refresh invalidates approvals of edited specs, then advances the stage when its exit
 // conditions are met. It runs after every write.
 func Refresh(st *State, s *Store) error {
+	if st.Template == Audit {
+		return AuditRefresh(st, s)
+	}
 	if st.Stage != "specification" {
 		return nil
 	}
@@ -215,6 +218,9 @@ func NextAction(st *State, s *Store) (string, error) {
 		}
 	}
 	waiting := OpenQuestions(st)
+	if st.Template == Audit {
+		return AuditNext(st, s)
+	}
 	if st.Template == Single {
 		if stage == "ended" {
 			return "The session ended.", nil
@@ -351,6 +357,7 @@ type Derived struct {
 	OpenFindings    map[string]int    `json:"open_findings,omitempty"`
 	SpecsApproved   *int              `json:"specs_approved,omitempty"`
 	PhasesDone      *int              `json:"phases_done,omitempty"`
+	Audit           *AuditDerived     `json:"audit,omitempty"`
 }
 
 func DeriveState(st *State, s *Store) (*Derived, error) {
@@ -364,6 +371,10 @@ func DeriveState(st *State, s *Store) (*Derived, error) {
 		d.AgentStatus[a.ID] = AgentStatus(st, a)
 	}
 	if st.Template == Single {
+		return d, nil
+	}
+	if st.Template == Audit {
+		d.Audit = DeriveAudit(st, s)
 		return d, nil
 	}
 	if b := BlockedReason(st); b != "" {

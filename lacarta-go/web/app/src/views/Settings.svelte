@@ -10,6 +10,8 @@
   const dirty = $derived(Object.entries(ui.modelDraft).some(([kr, m]) => { const [k, r] = kr.split("."); return saved[k][r] !== m; }));
   const stagesOf = kind => [...new Set(Object.values(kind.roles).map(x => x.stage))];
   let saving = $state(false);
+  let auditor = $state(null);
+  const auditorText = $derived(auditor ?? app.hub.settings.auditor ?? "");
 
   async function save(body) {
     saving = true;
@@ -32,6 +34,21 @@
 <section class="card"><label class="toggle"><input type="checkbox" checked={app.hub.settings.remote_control} onchange={e => save({ remote_control: e.currentTarget.checked })} />
   <span><strong>Keep agents listening to the console when their turn ends</strong><br />
   <span class="small muted">Each session keeps a listener running in the background: when you write from the console, answer or ask about a question, the agent wakes up and acts on it, even after its turn ended. You can keep using its terminal meanwhile. Each project's Chat can override this.</span></span></label></section>
+<h2>Auditor</h2>
+<section class="card"><label class="field" for="auditor">Your name, as it appears on the security audit reports you sign</label>
+  <div class="row"><input id="auditor" type="text" value={auditorText} oninput={e => { auditor = e.currentTarget.value; }} placeholder="First and last name" style="flex:1;min-width:0" />
+    <button type="button" class="btn" disabled={auditor === null || saving} onclick={async () => { await save({ auditor: auditorText }); auditor = null; }}>Save name</button></div>
+  <p class="small muted" style="margin:6px 0 0">Reports are owned by a person: approving one needs your name. Every report states that the audit was AI-assisted, and is signed so a client can check it wasn't changed.</p></section>
+<h2>Plugins on this machine</h2>
+<section class="card list">
+  {#each app.hub.plugins || [] as p (p.id)}
+    <div class="row"><strong>{p.name}</strong><span class="badge plain">{p.type}</span>{#if p.custom}<span class="badge accent">Custom</span>{/if}
+      <span class="small muted">{p.installed ? p.path : "Not installed"}{#if p.tested === false} · not the tested version{/if}</span>
+      {#if !p.installed && p.install_hint}<code class="small" style="margin-left:auto">{p.install_hint}</code>{/if}</div>
+    {#if p.problem && p.installed}<div class="small err">{p.problem}</div>{/if}
+  {/each}
+  <div class="small muted">Enable or disable them per project under its Plugins tab. Add your own with <code>lacarta plugin add &lt;folder or git URL&gt;</code>.</div>
+</section>
 <h2>Models by kind of project</h2>
 <div class="stack">
   {#each Object.entries(cat.kinds) as [k, kind] (k)}

@@ -9,25 +9,35 @@ import (
 // State is one project's state file. Field names are the contract shared with the Python
 // prototype (schema version 1), so its projects and tasks load unchanged.
 type State struct {
-	Version   int            `json:"version"`
-	Template  string         `json:"template"`
-	Project   Project        `json:"project"`
-	Stage     string         `json:"stage"`
-	Specs     OMap[*Spec]    `json:"specs"` // in the order of core.Specs; the prototype lists them in file order
-	Plan      Plan           `json:"plan"`
-	Phases    []*Phase       `json:"phases"`
-	Reviews   []*Review      `json:"reviews"`
-	Questions []*Question    `json:"questions"`
-	Decisions []*Decision    `json:"decisions"`
-	Findings  []*Finding     `json:"findings"`
-	Activity  []*Activity    `json:"activity"`
-	Counters  map[string]int `json:"counters"`
-	Agents    []*Agent       `json:"agents"`
-	Inbox     []*InboxMsg    `json:"inbox"`
-	Remote    *bool          `json:"remote"` // nil: follow the machine-wide default
-	Listening *Listening     `json:"listening"`
-	Attention *Attention     `json:"attention"`
-	MovedTo   string         `json:"moved_to,omitempty"`
+	Version   int                       `json:"version"`
+	Template  string                    `json:"template"`
+	Project   Project                   `json:"project"`
+	Stage     string                    `json:"stage"`
+	Specs     OMap[*Spec]               `json:"specs"` // in the order of core.Specs; the prototype lists them in file order
+	Plan      Plan                      `json:"plan"`
+	Phases    []*Phase                  `json:"phases"`
+	Reviews   []*Review                 `json:"reviews"`
+	Questions []*Question               `json:"questions"`
+	Decisions []*Decision               `json:"decisions"`
+	Findings  []*Finding                `json:"findings"`
+	Activity  []*Activity               `json:"activity"`
+	Counters  map[string]int            `json:"counters"`
+	Agents    []*Agent                  `json:"agents"`
+	Inbox     []*InboxMsg               `json:"inbox"`
+	Remote    *bool                     `json:"remote"` // nil: follow the machine-wide default
+	Listening *Listening                `json:"listening"`
+	Attention *Attention                `json:"attention"`
+	MovedTo   string                    `json:"moved_to,omitempty"`
+	Plugins   map[string]*ProjectPlugin `json:"plugins,omitempty"` // enabled per project; see internal/plugins
+	Audit     *AuditState               `json:"audit,omitempty"`
+}
+
+// ProjectPlugin: a plugin's state in one project. Ref pins the version the project uses.
+type ProjectPlugin struct {
+	Enabled bool   `json:"enabled"`
+	Ref     string `json:"ref"`
+	By      string `json:"by"`
+	At      string `json:"at"`
 }
 
 // Spec returns one spec's state (nil for a single-agent task).

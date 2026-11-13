@@ -24,8 +24,10 @@ import (
 	"syscall"
 	"time"
 
+	"lacarta/internal/auditreport"
 	"lacarta/internal/core"
 	"lacarta/internal/hooks"
+	"lacarta/internal/plugins"
 	"lacarta/web"
 )
 
@@ -167,6 +169,56 @@ type projectPayload struct {
 	Specs   *map[string]string `json:"specs,omitempty"` // software projects only, even when empty
 	Reports *map[string]string `json:"reports,omitempty"`
 	Chat    []hooks.ChatItem   `json:"chat"`
+	Audit   *auditPayload      `json:"audit,omitempty"`
+}
+
+// auditPayload is what the audit views need from the run files.
+type auditPayload struct {
+	Units        []*core.LedgerUnit       `json:"units"`
+	Findings     []*core.FinalFinding     `json:"findings"`
+	Architecture string                   `json:"architecture"`
+	Plugins      []*plugins.ProjectPlugin `json:"plugins"`
+	Draft        string                   `json:"draft"`
+	DraftHash    string                   `json:"draft_hash"`
+	Auditor      string                   `json:"auditor"`
+	Actions      map[string][]core.KV     `json:"actions"`
+	Error        string                   `json:"error,omitempty"`
+}
+
+func auditData(pid string, st *core.State) *auditPayload {
+	run := core.CurrentRun(st)
+	out := &auditPayload{Units: []*core.LedgerUnit{}, Findings: []*core.FinalFinding{}, Auditor: core.SettingsRead().Auditor,
+		Actions: core.ReviewActions}
+	var errs []string
+	if units, err := core.ReadLedger(run); err != nil {
+		errs = append(errs, err.Error())
+	} else if units != nil {
+		out.Units = units
+	}
+	if fs, err := core.ReadFindings(run); err != nil {
+		errs = append(errs, err.Error())
+	} else {
+		out.Findings = core.FinalFindings(st, fs)
+	}
+	if run != nil {
+		if b, err := os.ReadFile(core.RunFile(run, "architecture.md")); err == nil {
+			out.Architecture = string(b)
+		}
+	}
+	if ps, err := plugins.ForProject(st); err == nil {
+		out.Plugins = ps
+	} else {
+		errs = append(errs, err.Error())
+	}
+	if st.Stage == "review" || st.Stage == "report" {
+		if md, h, err := auditreport.Draft(pid, st, out.Auditor); err == nil {
+			out.Draft, out.DraftHash = md, h
+		} else {
+			errs = append(errs, err.Error())
+		}
+	}
+	out.Error = strings.Join(errs, "; ")
+	return out
 }
 
 func payload(pid string) (*projectPayload, error) {
@@ -202,6 +254,9 @@ func payload(pid string) (*projectPayload, error) {
 				}
 			}
 		}
+	}
+	if st.Template == core.Audit {
+		out.Audit = auditData(pid, st)
 	}
 	out.Chat = []hooks.ChatItem{}
 	if a := core.MustAgent(st, core.Orchestrator); a.Session != nil {
@@ -383,7 +438,10 @@ func (con *Console) get(w http.ResponseWriter, r *http.Request) {
 		con.events.serve(w, r)
 		return
 	}
-	if !con.keyOK(r.Header.Get("X-Lacarta-Token")) {
+	// Report files open in a new tab or download, which send no header: they may carry the key.
+	keyed := con.keyOK(r.Header.Get("X-Lacarta-Token")) ||
+		(strings.HasSuffix(path, "/report") && con.keyOK(r.URL.Query().Get("key")))
+	if !keyed {
 		fail(w, 403, "Missing or wrong key. Open the URL `serve` printed.")
 		return
 	}
@@ -398,7 +456,15 @@ func (con *Console) get(w http.ResponseWriter, r *http.Request) {
 			e, _ := h.Projects.Get(k)
 			ps = append(ps, summary(k, e))
 		}
-		send(w, 200, map[string]any{"projects": ps, "settings": core.SettingsRead(), "catalog": catalog()})
+		out := map[string]any{"projects": ps, "settings": core.SettingsRead(), "catalog": catalog()}
+		if all, err := plugins.List(); err == nil {
+			out["plugins"] = all
+		}
+		send(w, 200, out)
+		return
+	}
+	if pid, action := projectPath(path); pid != "" && action == "report" {
+		reportFile(w, r, pid)
 		return
 	}
 	if pid, action := projectPath(path); pid != "" && action == "state" {
@@ -464,6 +530,15 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 				}
 			}
 		}
+		if v, ok := body["auditor"].(string); ok {
+			s, err := core.SetAuditor(v)
+			if err != nil {
+				gateOr500(w, err)
+				return
+			}
+			send(w, 200, map[string]any{"ok": true, "settings": s})
+			return
+		}
 		var remote *bool
 		if v, ok := body["remote_control"].(bool); ok {
 			remote = &v
@@ -510,6 +585,19 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 			result, err = core.DiscussQuestion(st, str("id", 0), str("message", 20_000))
 		case "message":
 			result, err = core.AddMessage(st, str("message", 20_000))
+		case "review":
+			err = core.ReviewFinding(st, s, str("fingerprint", 0), str("action", 0), str("severity", 0), str("reason", 20_000))
+		case "summary":
+			if st.Template != core.Audit || (st.Stage != "review" && st.Stage != "report") {
+				return core.Gate("The executive summary is edited once the findings are reviewed.")
+			}
+			st.Audit.Summary, st.Audit.SummaryBy = strings.TrimSpace(str("text", 20_000)), "user"
+			core.Log(st, "You edited the executive summary.", "stage")
+		case "approve":
+			result, err = auditreport.Approve(pid, st, core.SettingsRead().Auditor, str("hash", 0))
+		case "plugin":
+			on, _ := body["enabled"].(bool)
+			err = plugins.SetEnabled(st, str("id", 0), on, "user")
 		case "remote":
 			if on, ok := body["on"].(bool); ok {
 				st.Remote = &on
@@ -539,6 +627,61 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 }
 
 var errNotFound = errors.New("not found")
+
+// reportFile serves a final report's files (?v=N&f=md|html|pdf|provenance|sig|signers) or the
+// draft's print page (?draft=1). Report HTML has no script; it gets a CSP that allows none.
+func reportFile(w http.ResponseWriter, r *http.Request, pid string) {
+	s, err := core.ProjectStore(pid)
+	if err != nil {
+		fail(w, 404, "Not found.")
+		return
+	}
+	st, err := s.Read()
+	if err != nil || st.Template != core.Audit {
+		fail(w, 404, "Not found.")
+		return
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:")
+	q := r.URL.Query()
+	if q.Get("draft") == "1" {
+		d, err := auditreport.Build(pid, st, core.SettingsRead().Auditor, "", 0)
+		if err != nil {
+			gateOr500(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, auditreport.HTML(d, auditreport.Markdown(d)))
+		return
+	}
+	if st.Audit.Report == nil {
+		fail(w, 404, "No approved report yet.")
+		return
+	}
+	var v *core.ReportVersion
+	for _, x := range st.Audit.Report.Versions {
+		if fmt.Sprint(x.Version) == q.Get("v") {
+			v = x
+		}
+	}
+	names := map[string][2]string{"md": {"report.md", "text/markdown; charset=utf-8"}, "html": {"report.html", "text/html; charset=utf-8"},
+		"pdf": {"report.pdf", "application/pdf"}, "provenance": {"report.provenance.json", "application/json"},
+		"sig": {"report.provenance.json.sig", "text/plain"}, "signers": {"allowed_signers", "text/plain"}}
+	n, ok := names[q.Get("f")]
+	if v == nil || !ok {
+		fail(w, 404, "Not found.")
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(v.Dir, n[0]))
+	if err != nil {
+		fail(w, 404, "Not found.")
+		return
+	}
+	w.Header().Set("Content-Type", n[1])
+	if q.Get("f") != "html" {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fmt.Sprintf("%s-v%d-%s", pid, v.Version, n[0])))
+	}
+	_, _ = w.Write(b)
+}
 
 func gateOr500(w http.ResponseWriter, err error) {
 	if core.IsGate(err) {

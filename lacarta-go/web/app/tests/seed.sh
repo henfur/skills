@@ -6,6 +6,7 @@ cd "$(dirname "$0")/../../.."          # lacarta-go/
 RUN="$PWD/web/app/tests/.run"
 rm -rf "$RUN" && mkdir -p "$RUN/claude/projects/x" "$RUN/task" "$RUN/done-task"
 export LACARTA_HOME="$RUN/home" CLAUDE_CONFIG_DIR="$RUN/claude" LACARTA_NO_DAEMON=1
+unset LACARTA_PROJECT LACARTA_SESSION LACARTA_AGENT   # from the session running the tests
 go build -o "$RUN/lacarta" ./cmd/lacarta
 L="$RUN/lacarta"
 mkdir -p "$LACARTA_HOME" && echo '{"remote_control": false}' > "$LACARTA_HOME/settings.json"
@@ -34,7 +35,27 @@ echo "{\"session_id\":\"s2\",\"cwd\":\"$RUN/shop\"}" | "$L" hook session-start >
   --scenario "Anyone can read every order" --recommendation "Specify sessions" > /dev/null
 SHOP=$(sed -n 's/.*"\(shop-[0-9a-f]*\)".*/\1/p' "$LACARTA_HOME/hub.json" | head -1)
 
-printf '{"task":"%s","done":"%s","shop":"%s","lacarta":"%s","home":"%s","shopRoot":"%s"}\n' \
-  "$TASK" "$DONE" "$SHOP" "$L" "$LACARTA_HOME" "$RUN/shop" > "$RUN/ids.json"
+# A security audit waiting for the auditor's review (needs the security-audit skill, node and bubblewrap).
+AUDIT=""
+mkdir -p "$RUN/target/src" && echo "// api" > "$RUN/target/src/api.js"
+if "$L" audit preflight > "$RUN/preflight.txt" 2>&1; then
+  AUDIT=$("$L" audit init --target "$RUN/target" --name "Orders API" | sed -n 's/^Security audit \(audit-[a-z0-9-]*\) of.*/\1/p')
+  A() { "$L" --project "$AUDIT" "$@"; }
+  A audit scope --profile quick --budget 20 > /dev/null
+  A answer Q-1 --choice Approve > /dev/null
+  RD="$LACARTA_HOME/audits/$AUDIT/run-1"
+  SKILL=$(sed -n 's/^ok   security-audit skill *\(\/[^ ]*\) .*/\1/p' "$RUN/preflight.txt")
+  mkdir -p "$RD" && echo "# Architecture" > "$RD/architecture.md" && echo '{"run_status":"in_progress"}' > "$RD/run-metadata.json"
+  node "$PWD/web/app/tests/audit-fixture.cjs" "$SKILL/validate-coverage-ledger.cjs" "$RD" plan.json
+  mv "$RD/plan.json" "$RD/coverage-ledger.json"
+  A audit plan submit > /dev/null
+  A answer Q-2 --choice Approve > /dev/null
+  node "$PWD/web/app/tests/audit-fixture.cjs" "$SKILL/validate-coverage-ledger.cjs" "$RD" coverage-ledger.json
+  A audit findings submit > /dev/null
+  A audit summary --text "One high finding: any user can update any order." > /dev/null
+fi
+
+printf '{"task":"%s","done":"%s","shop":"%s","audit":"%s","lacarta":"%s","home":"%s","shopRoot":"%s"}\n' \
+  "$TASK" "$DONE" "$SHOP" "$AUDIT" "$L" "$LACARTA_HOME" "$RUN/shop" > "$RUN/ids.json"
 unset LACARTA_NO_DAEMON
 exec "$L" serve --port "${PORT:-4799}"

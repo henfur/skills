@@ -169,6 +169,17 @@ func Migrate(st *State) error {
 		}
 	}
 	nilSlices(st)
+	if a := st.Audit; a != nil {
+		if a.Runs == nil {
+			a.Runs = []*AuditRun{}
+		}
+		if a.Reviews == nil {
+			a.Reviews = map[string]*AuditReview{}
+		}
+		if a.Recheck == nil {
+			a.Recheck = map[string]string{}
+		}
+	}
 	return nil
 }
 

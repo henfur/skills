@@ -118,6 +118,7 @@ export const ui = $state({
   errors: {},            // "<project>/<question>" -> message
   specTab: "functional",
   findingFilter: "unresolved",
+  auditTab: "confirmed",
   modelDraft: {},        // "kind.role" -> alias
   modelError: "",
   settingsNote: "",

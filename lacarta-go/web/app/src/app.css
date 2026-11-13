@@ -365,3 +365,21 @@ figure.diagram .err { text-align: left; }
 .chat-log .md pre { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 .chat-log .md pre code { white-space: pre; overflow-wrap: normal; }
 .chat-log .md img { max-width: 100%; height: auto; }
+
+/* Security audits. */
+.audit-steps { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+@media (max-width: 900px) { .audit-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+table.coverage td, table.coverage th { white-space: nowrap; }
+table.coverage td[colspan] { white-space: normal; background: var(--surface-sunken); }
+.coverage .cell { cursor: pointer; font: inherit; font-size: 12px; }
+.unit { padding: 8px 0; border-top: 1px solid var(--border-subtle); display: grid; gap: 2px; }
+.unit:first-child { border-top: 0; }
+.finding.pending { border-color: var(--brand-border); box-shadow: inset 0 0 0 1px var(--brand-border), var(--shadow-sm); }
+.finding details { margin-top: 8px; }
+.finding .overline { margin-top: 10px; }
+.review-card { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle); display: grid; gap: 6px; }
+.review-card select, .review-card textarea { max-width: 100%; }
+.plugin .row { gap: 8px; }
+input[type="text"] { height: 36px; padding: 0 12px; border-radius: var(--radius-md); border: 1px solid var(--border);
+  background: var(--surface-raised); color: var(--text); font: 400 15px/22px var(--sans); }
+input[type="text"]:focus-visible, textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }

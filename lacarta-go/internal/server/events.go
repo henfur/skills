@@ -89,7 +89,19 @@ func snapshot() (hub [2]stamp, projects map[string]stamp) {
 	if hb, err := core.HubRead(); err == nil {
 		for _, id := range hb.Projects.Keys() {
 			if s, err := core.ProjectStore(id); err == nil {
-				projects[id] = stat(s.Path())
+				st := stat(s.Path())
+				if p, _ := hb.Projects.Get(id); p.Template == core.Audit {
+					// The agents write the skill's run files directly: they change the audit too.
+					runs, _ := filepath.Glob(filepath.Join(s.Dir, "run-*", "*.json"))
+					for _, f := range runs {
+						x := stat(f)
+						if x.mod.After(st.mod) {
+							st.mod = x.mod
+						}
+						st.size += x.size
+					}
+				}
+				projects[id] = st
 			}
 		}
 	}

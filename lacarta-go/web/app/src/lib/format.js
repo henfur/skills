@@ -4,6 +4,12 @@ import DOMPurify from "dompurify";
 export const SPEC_ORDER = ["functional", "architecture", "stack", "security"];
 export const STAGES = [["specification", "Specification"], ["implementation", "Implementation"], ["final-review", "Final review"], ["done", "Done"]];
 export const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
+// Security audits: their stages, and the skill's severity scale.
+export const AUDIT_STAGES = [["scope", "Scope"], ["recon", "Recon"], ["coverage-plan", "Coverage plan"], ["hunt", "Hunting & validation"],
+  ["review", "Your review"], ["report", "Report"], ["done", "Done"]];
+export const AUDIT_SEV = ["critical", "high", "medium", "low", "informational"];
+export const UNIT_TONE = { planned: "", in_progress: "info", covered: "success", candidate: "warning", blocked: "danger",
+  deferred: "accent", out_of_scope: "" };
 export const UNRESOLVED = new Set(["open", "fixing", "redesign"]);
 
 export const label = s => String(s ?? "").replace(/-/g, " ").replace(/^./, c => c.toUpperCase());

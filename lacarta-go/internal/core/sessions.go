@@ -97,6 +97,11 @@ func RegisterSession(sid, cwd, transcript, source string) (string, *Store, error
 			return "", nil, err
 		}
 		s = SoftwareStore(root)
+	} else if aid := AuditFor(cwd); aid != "" {
+		pid = aid
+		if s, err = ProjectStore(aid); err != nil {
+			return "", nil, err
+		}
 	} else if pid, s, err = CreateSingle(cwd); err != nil {
 		return "", nil, err
 	}

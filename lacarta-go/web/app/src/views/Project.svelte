@@ -8,6 +8,11 @@
   import Findings from "./Findings.svelte";
   import Decisions from "./Decisions.svelte";
   import Activity from "./Activity.svelte";
+  import AuditOverview from "./AuditOverview.svelte";
+  import Coverage from "./Coverage.svelte";
+  import AuditFindings from "./AuditFindings.svelte";
+  import Report from "./Report.svelte";
+  import Plugins from "./Plugins.svelte";
   import { app, L } from "../lib/state.svelte.js";
   import { UNRESOLVED } from "../lib/format.js";
 
@@ -16,6 +21,9 @@
     software: [["overview", "Overview", Overview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
       ["specs", "Specifications", Specs], ["phases", "Phases & reviews", Phases], ["findings", "Findings", Findings],
       ["decisions", "Decisions", Decisions], ["activity", "Activity", Activity]],
+    audit: [["overview", "Overview", AuditOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
+      ["coverage", "Coverage", Coverage], ["findings", "Findings", AuditFindings], ["report", "Report", Report],
+      ["plugins", "Plugins", Plugins], ["decisions", "Decisions", Decisions], ["activity", "Activity", Activity]],
     single: [["overview", "Overview", SingleOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
       ["activity", "Activity", Activity]],
   };
@@ -27,7 +35,9 @@
     questions: [d.open_questions, d.open_questions > 0],
     specs: d.specs_approved != null ? [`${d.specs_approved}/4`, false] : null,
     phases: d.phases_done != null ? [`${d.phases_done}/${st.phases.length}`, false] : null,
-    findings: d.open_findings ? [st.findings.filter(f => UNRESOLVED.has(f.status)).length, d.open_findings.critical + d.open_findings.high > 0] : null,
+    coverage: d.audit?.units_total ? [d.audit.units_total, false] : null,
+    report: d.audit?.latest_report ? [`v${d.audit.latest_report.version}`, false] : null,
+    findings: d.audit ? (d.audit.has_findings ? [d.audit.to_review ? `${d.audit.to_review} to review` : (app.data.audit?.findings || []).length, d.audit.to_review > 0] : null) : d.open_findings ? [st.findings.filter(f => UNRESOLVED.has(f.status)).length, d.open_findings.critical + d.open_findings.high > 0] : null,
     decisions: [st.decisions.length, false],
     chat: d.pending_messages ? [`${d.pending_messages} queued`, false] : null,
   });

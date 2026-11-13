@@ -32,6 +32,10 @@ internal/core/     state files, locking, migration, hub, settings, questions, ga
 internal/cli/      argument parsing and commands (output is a contract: agents read it)
 internal/hooks/    hook events, transcript reader, install (Claude Code)
 internal/server/   console daemon and API
+internal/plugins/  plugin registry, the security-audit skill as a required plugin, preflight, validators, check tools
+internal/sandbox/  bubblewrap sandbox for target code, check tools and validators
+internal/auditreport/  audit report (markdown, print HTML, PDF), approval, verification
+internal/provenance/   Ed25519 report signing in OpenSSH's SSHSIG format
 internal/golden/   parity suite
 skill/             embedded files (spec templates now; the whole skill in phase 4)
 web/app/           console source (Svelte 5, Vite, Bun); tests in web/app/tests/
@@ -43,6 +47,14 @@ testdata/          scenarios and recordings
 The spec templates in `skill/templates/` and the page in `web/legacy/` are copies of the prototype's files until phase 4 removes it; change both.
 
 Besides the golden suite: `internal/hooks` tests the listening Stop hook (woken by a message, an answer or a "Talk about this" message; ended by remote control off or SIGTERM), the transcript reader and install; `internal/server` runs the prototype's daemon and the Go handler on the same state files and compares their JSON, then tests every action and the auth checks.
+
+## Security audits
+
+`lacarta audit init --target <repo>` starts an audit after a preflight (Cloudflare's security-audit skill, node, bubblewrap, the
+skill's validator tests); `lacarta audit guide` is what the orchestrator agent follows. The auditor approves the rules of
+engagement and the coverage plan, reviews every finding and approves the report in the console; the final report is signed
+and `lacarta audit verify <final/vN>` checks it. Design and status: [`docs/design/security-audit.md`](docs/design/security-audit.md).
+`internal/cli/audit_test.go` drives a whole audit with the real validators (skipped on machines that can't run audits).
 
 ## Console
 
