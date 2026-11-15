@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync, appendFileSync } from "node:fs";
+import { readFileSync, appendFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 // The seed script's projects: a task with a question, an ended task, a software project with a
@@ -86,6 +86,24 @@ test("settings: change a model", async ({ page }) => {
   await page.reload();
   await expect(page.getByLabel("Model for Security review")).toHaveValue("haiku");
   expect(lacarta("--root", ids().shopRoot, "models")).toMatch(/security_review\s+haiku/);
+});
+
+test("config files: the machine's on Settings, a project's over it", async ({ page }) => {
+  await page.goto("/#/settings");
+  await expect(page.getByText(`${ids().home}/config.json`)).toBeVisible();
+  await expect(page.getByText("runs the security-audit skill's validators")).toBeVisible();
+  const file = `${ids().shopRoot}/.lacarta/config.json`;
+  writeFileSync(file, JSON.stringify({ models: { implementation: "haiku" }, colour: "blue", tools: { node: "/tmp/x" } }));
+  try {
+    await page.goto(`/#/p/${ids().shop}/overview`);
+    const banner = page.locator(".banner.warn", { hasText: "Ignored in" });
+    await expect(banner).toContainText('unknown setting "colour"');
+    await expect(banner).toContainText("tools: can only be set in");
+    await expect(page.locator(".config-note")).toContainText("sets the models of implementation");
+    expect(lacarta("--root", ids().shopRoot, "models")).toMatch(/implementation\s+haiku\s+Haiku 5.5\s+Implementation \(this project's config.json\)/);
+  } finally {
+    unlinkSync(file);
+  }
 });
 
 test("archive an ended task", async ({ page }) => {

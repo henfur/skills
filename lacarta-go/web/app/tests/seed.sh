@@ -9,7 +9,7 @@ export LACARTA_HOME="$RUN/home" CLAUDE_CONFIG_DIR="$RUN/claude" LACARTA_NO_DAEMO
 unset LACARTA_PROJECT LACARTA_SESSION LACARTA_AGENT   # from the session running the tests
 go build -o "$RUN/lacarta" ./cmd/lacarta
 L="$RUN/lacarta"
-mkdir -p "$LACARTA_HOME" && echo '{"remote_control": false}' > "$LACARTA_HOME/settings.json"
+mkdir -p "$LACARTA_HOME" && echo '{"//": "seeded", "remote_control": false}' > "$LACARTA_HOME/config.json"
 
 # A single-agent task with a transcript and a question.
 T="$CLAUDE_CONFIG_DIR/projects/x/s1.jsonl"

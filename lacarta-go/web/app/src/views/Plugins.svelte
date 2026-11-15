@@ -21,11 +21,12 @@
   {#each list as p (p.id)}
     <section class="card plugin">
       <div class="row">
-        <label class="toggle" style="margin:0"><input type="checkbox" checked={p.enabled} disabled={p.need === "required" || busy === p.id || (!p.enabled && (!p.installed || p.problem))}
+        <label class="toggle" style="margin:0"><input type="checkbox" checked={p.enabled} disabled={p.need === "required" || p.config === "project" || busy === p.id || (!p.enabled && (!p.installed || p.problem))}
           onchange={e => toggle(p, e.currentTarget.checked)} aria-label="Enable {p.name}" />
           <span><strong>{p.name}</strong></span></label>
         <Badge s="draft" text={p.type} />
         {#if p.need === "required"}<Badge s="awaiting-approval" text="Required" />{/if}
+        {#if p.config === "project"}<Badge s="draft" text="Set in this project's config.json" />{/if}
         {#if p.custom}<Badge s="accepted" text="Custom" />{/if}
         {#if p.tested === false}<Badge s="changed" text="Not the tested version" />{/if}
         {#if p.drift}<Badge s="changed" text="Installed version differs from this project's" />{/if}

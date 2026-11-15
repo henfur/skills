@@ -13,6 +13,7 @@
   import AuditFindings from "./AuditFindings.svelte";
   import Report from "./Report.svelte";
   import Plugins from "./Plugins.svelte";
+  import Icon from "../components/Icon.svelte";
   import { app, L } from "../lib/state.svelte.js";
   import { UNRESOLVED } from "../lib/format.js";
 
@@ -50,4 +51,17 @@
     <a href={L(k)} aria-current={k === current[0] ? "page" : undefined}>{name}{#if c}{" "}<span class="count" class:hot={c[1]}>{c[0]}</span>{/if}</a>
   {/each}
 </nav>
+{#if app.data.config}
+  {@const cfg = app.data.config}
+  {#if cfg.warnings.length}<div class="banner warn"><Icon name="warn" /><div><strong>Ignored in <code>{cfg.path}</code></strong>
+    <ul class="small" style="margin:4px 0 0">{#each cfg.warnings as w, i (i)}<li>{w}</li>{/each}</ul></div></div>{/if}
+{/if}
 <View {st} {d} />
+{#if app.data.config}
+  {@const cfg = app.data.config}
+  {#if current[0] === "overview" && (cfg.models || cfg.plugins || cfg.templates || cfg.remote_control != null)}
+    <p class="small muted config-note">This project's <code>{cfg.path}</code> sets
+      {[cfg.models && `the models of ${Object.keys(cfg.models).map(r => (app.hub.catalog.kinds[st.template]?.roles[r]?.label || r).toLowerCase()).join(", ")}`,
+        cfg.templates && "the spec templates", cfg.plugins && "plugins", cfg.remote_control != null && "remote control"].filter(Boolean).join(", ")}, over the machine's Settings.</p>
+  {/if}
+{/if}

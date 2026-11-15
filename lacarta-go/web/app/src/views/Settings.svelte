@@ -1,6 +1,7 @@
 <script>
   import { app, ui, modelName, refresh } from "../lib/state.svelte.js";
   import { post } from "../lib/api.js";
+  import Icon from "../components/Icon.svelte";
   // Machine-wide: the remote-control default and the model for every role of every kind.
   const cat = $derived(app.hub.catalog);
   const saved = $derived(app.hub.settings.models);
@@ -12,6 +13,7 @@
   let saving = $state(false);
   let auditor = $state(null);
   const auditorText = $derived(auditor ?? app.hub.settings.auditor ?? "");
+  const cfg = $derived(app.hub.settings.config);
 
   async function save(body) {
     saving = true;
@@ -30,6 +32,22 @@
 
 <h1>Settings</h1>
 <p class="lede">For every project on this machine. Agents read the models before each spawn, so a change applies to the next agent started.</p>
+<h2>Configuration file</h2>
+<section class="card">
+  <div class="row"><code>{cfg.path}</code><span class="small muted">{cfg.exists ? "" : "not created yet: saving anything on this page creates it"}</span></div>
+  <p class="small muted" style="margin:6px 0 0">This page saves into it; other settings are set by editing it: spec templates, plugins on by default and tool paths. <code>lacarta config</code> shows what is in effect and <code>lacarta config check</code> what is ignored.
+    A project's own <code>.lacarta/config.json</code> can override models, remote control, spec templates and plugins. Tool paths and the auditor are set only here: a project's file can be in a repository you cloned.</p>
+  {#if cfg.warnings.length}<div class="banner warn" style="margin:8px 0 0"><Icon name="warn" /><div><strong>Ignored in this file</strong>
+    <ul class="small" style="margin:4px 0 0">{#each cfg.warnings as w, i (i)}<li>{w}</li>{/each}</ul></div></div>{/if}
+  <div class="list" style="margin-top:8px">
+    <div class="row"><span class="field" style="margin:0;min-width:120px">Spec templates</span>{#if app.hub.settings.templates}<code class="small">{app.hub.settings.templates}</code>{:else}<span class="small muted">built-in</span>{/if}</div>
+    {#each app.hub.tools || [] as t (t.name)}
+      <div class="row"><span class="field" style="margin:0;min-width:120px">{t.name}</span>
+        {#if t.path}<code class="small" style="overflow-wrap:anywhere;min-width:0">{t.path}</code>{:else}<span class="small muted">not found</span>{/if}
+        {#if t.configured}<span class="badge plain">set in config</span>{/if}<span class="small muted" style="margin-left:auto">{t.about}</span></div>
+    {/each}
+  </div>
+</section>
 <h2>Remote control</h2>
 <section class="card"><label class="toggle"><input type="checkbox" checked={app.hub.settings.remote_control} onchange={e => save({ remote_control: e.currentTarget.checked })} />
   <span><strong>Keep agents listening to the console when their turn ends</strong><br />
@@ -43,7 +61,7 @@
 <section class="card list">
   {#each app.hub.plugins || [] as p (p.id)}
     <div class="row"><strong>{p.name}</strong><span class="badge plain">{p.type}</span>{#if p.custom}<span class="badge accent">Custom</span>{/if}
-      <span class="small muted">{p.installed ? p.path : "Not installed"}{#if p.tested === false} · not the tested version{/if}</span>
+      <span class="small muted">{p.installed ? p.path : "Not installed"}{#if p.tested === false} · not the tested version{/if}{#if app.hub.settings.plugins?.[p.id] !== undefined} · {app.hub.settings.plugins[p.id] ? "on" : "off"} by default in new projects (config file){/if}</span>
       {#if !p.installed && p.install_hint}<code class="small" style="margin-left:auto">{p.install_hint}</code>{/if}</div>
     {#if p.problem && p.installed}<div class="small err">{p.problem}</div>{/if}
   {/each}
