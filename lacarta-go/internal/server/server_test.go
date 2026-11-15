@@ -120,14 +120,16 @@ func getJSON(t *testing.T, url string) any {
 	return v
 }
 
-// dropAuditKind removes what the security-audit kind added after the prototype was frozen:
-// the kind in the catalog, its models in the settings, and the plugins.
+// dropAuditKind removes what was added after the prototype was frozen: the security-audit kind
+// in the catalog, its models in the settings, the plugins, and the config file's metadata.
 func dropAuditKind(hub any) {
 	h := hub.(map[string]any)
 	cat := h["catalog"].(map[string]any)
 	delete(cat["kinds"].(map[string]any), "audit")
 	cat["planned"] = append([]any{"Security audit"}, cat["planned"].([]any)...)
 	delete(h["settings"].(map[string]any)["models"].(map[string]any), "audit")
+	delete(h["settings"].(map[string]any), "config")
+	delete(h, "tools")
 	delete(h, "plugins")
 }
 

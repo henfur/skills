@@ -30,6 +30,10 @@ type State struct {
 	MovedTo   string                    `json:"moved_to,omitempty"`
 	Plugins   map[string]*ProjectPlugin `json:"plugins,omitempty"` // enabled per project; see internal/plugins
 	Audit     *AuditState               `json:"audit,omitempty"`
+
+	// Where the state was read from: the project's folder and its state folder (config.json).
+	Root string `json:"-"`
+	Dir  string `json:"-"`
 }
 
 // ProjectPlugin: a plugin's state in one project. Ref pins the version the project uses.

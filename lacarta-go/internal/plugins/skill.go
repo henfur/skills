@@ -129,7 +129,7 @@ func Preflight() ([]Check, error) {
 	}
 	out = append(out, skill)
 	node := Check{Name: "node", Required: true}
-	if p, err := exec.LookPath("node"); err == nil {
+	if p := core.ToolPath("node"); p != "" {
 		node.OK, node.Detail = true, p
 	} else {
 		node.Detail = "The skill's validators need Node.js."
@@ -158,7 +158,7 @@ func Preflight() ([]Check, error) {
 			continue
 		}
 		c := Check{Name: d.ID}
-		if p, err := exec.LookPath(d.Program); err == nil {
+		if p := core.ToolPath(d.Program); p != "" {
 			c.OK, c.Detail = true, p
 		} else {
 			c.Detail = "Not installed; the audit runs without it. " + d.InstallHint
@@ -216,7 +216,7 @@ func RunCheck(id, target, out string) (string, error) {
 		if locks == 0 {
 			return "No lockfiles found: nothing to scan.", core.WriteJSON(out, map[string]any{"results": []any{}})
 		}
-		dl := exec.Command("osv-scanner", "scan", "source", "--offline-vulnerabilities", "--download-offline-databases",
+		dl := exec.Command(core.ToolPath("osv-scanner"), "scan", "source", "--offline-vulnerabilities", "--download-offline-databases",
 			"--format", "json", "-r", filepath.Join(scratch, "locks"))
 		dl.Env = append(os.Environ(), "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY="+db)
 		_, _ = dl.CombinedOutput() // its findings are recomputed below; only the download matters

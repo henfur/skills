@@ -160,12 +160,7 @@ func Chromium() string {
 	if p := os.Getenv("LACARTA_CHROMIUM"); p != "" {
 		return p
 	}
-	for _, name := range []string{"chromium", "chromium-browser", "google-chrome-stable", "google-chrome", "chrome"} {
-		if p, err := exec.LookPath(name); err == nil {
-			return p
-		}
-	}
-	return ""
+	return core.ToolPath("chromium", "chromium-browser", "google-chrome-stable", "google-chrome", "chrome")
 }
 
 // PrintPDF prints the HTML report to PDF with headless Chromium; false when none is installed.

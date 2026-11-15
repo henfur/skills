@@ -82,24 +82,26 @@ func stat(path string) stamp {
 	return stamp{info.ModTime(), info.Size()}
 }
 
-// snapshot stamps the hub and the settings, and every project's state file.
+// snapshot stamps the hub and the home config, and every project's state and config files.
 func snapshot() (hub [2]stamp, projects map[string]stamp) {
-	hub = [2]stamp{stat(filepath.Join(core.Home(), "hub.json")), stat(filepath.Join(core.Home(), "settings.json"))}
+	hub = [2]stamp{stat(filepath.Join(core.Home(), "hub.json")), stat(core.HomeConfigPath())}
 	projects = map[string]stamp{}
 	if hb, err := core.HubRead(); err == nil {
 		for _, id := range hb.Projects.Keys() {
 			if s, err := core.ProjectStore(id); err == nil {
 				st := stat(s.Path())
+				extra := []string{filepath.Join(s.Dir, core.ConfigFile)}
 				if p, _ := hb.Projects.Get(id); p.Template == core.Audit {
-					// The agents write the skill's run files directly: they change the audit too.
+					// The agents write the skill's run files directly.
 					runs, _ := filepath.Glob(filepath.Join(s.Dir, "run-*", "*.json"))
-					for _, f := range runs {
-						x := stat(f)
-						if x.mod.After(st.mod) {
-							st.mod = x.mod
-						}
-						st.size += x.size
+					extra = append(extra, runs...)
+				}
+				for _, f := range extra { // the project's config and an audit's run files change it too
+					x := stat(f)
+					if x.mod.After(st.mod) {
+						st.mod = x.mod
 					}
+					st.size += x.size
 				}
 				projects[id] = st
 			}

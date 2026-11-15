@@ -44,7 +44,7 @@ All state is JSON. Field names are shared with the Python prototype (schema vers
 | File | Lock | Content |
 | --- | --- | --- |
 | `hub.json` | `~/.lacarta/.lock` | `{"projects": {id: HubProject}, "sessions": {session_id: project_id}}`, both in insertion order (`core.OMap`) |
-| `settings.json` | `~/.lacarta/.lock` | `{"models": {kind: {role: alias}}, "remote_control": bool}`; missing values fall back to defaults (`core.SettingsRead`) |
+| `config.json` | `~/.lacarta/.lock` | the machine's configuration: `{"models": {kind: {role: alias}}, "remote_control", "auditor", "templates", "plugins", "tools"}`, all optional; missing or invalid values fall back to defaults with a warning (`core.SettingsRead`). Saves rewrite only the keys they change. A legacy `settings.json` is read while `config.json` doesn't exist and is moved on the first save. A project's `config.json` in its state folder overrides `models` (`{role: alias}`), `remote_control`, `templates` and `plugins` (`core.ProjectConfigRead`); see the README's Configuration section |
 | `daemon.json` (0600) | none | `{url, open_url, pid, started_at}`; `open_url` carries `?key=` when bound beyond loopback; valid only while `pid` is alive |
 | `tasks/<id>/state.json` | `tasks/<id>/.lock` | a single-agent task's `State` |
 | `hooks.log`, `daemon.log` | none | failures, daemon output |
@@ -228,7 +228,7 @@ Reviewer `finding add --severity high` → finding open + triage question (effec
 - Consequences: the terminal is never held; the agent spends a short turn restarting the listener after each wake-up; a message that arrives mid-turn reaches the agent at its next tool call. Claude Code labels Stop-hook deliveries "Stop hook blocking error" (cosmetic).
 
 ### AD-5: Live updates by server-sent events from file polling
-- Decision: while at least one page is subscribed, the daemon compares the modification times and sizes of `hub.json`, `settings.json` and each project's `state.json` every 500 ms and emits `project` (with its id) and `hub` events; the page re-fetches. It polls every 15 s while the stream is healthy, every 2.5 s otherwise. Standard library only (`internal/server/events.go`).
+- Decision: while at least one page is subscribed, the daemon compares the modification times and sizes of `hub.json`, `config.json` and each project's `state.json` and `config.json` every 500 ms and emits `project` (with its id) and `hub` events; the page re-fetches. It polls every 15 s while the stream is healthy, every 2.5 s otherwise. Standard library only (`internal/server/events.go`).
 - Alternatives considered: fsnotify (a dependency, platform quirks), WebSockets (bidirectional is not needed).
 
 ### AD-6: Kinds of project behind an interface (phase 5)

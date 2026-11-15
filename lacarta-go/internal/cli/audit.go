@@ -23,7 +23,8 @@ import (
 
 // Commands that need no project.
 var noProject = map[string]bool{"audit init": true, "audit preflight": true, "audit verify": true,
-	"plugin list": true, "plugin install": true, "plugin add": true, "plugin remove": true, "sandbox run": true}
+	"plugin list": true, "plugin install": true, "plugin add": true, "plugin remove": true, "sandbox run": true,
+	"config": true, "config check": true, "config init": true}
 
 func auditCommands() []*Cmd {
 	roles := []string{}

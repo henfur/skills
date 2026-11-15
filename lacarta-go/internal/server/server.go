@@ -72,6 +72,27 @@ func catalog() any {
 	return map[string]any{"models": models, "planned": core.PlannedKinds, "kinds": kinds}
 }
 
+type toolOut struct {
+	Name       string `json:"name"`
+	About      string `json:"about"`
+	Path       string `json:"path"`
+	Configured bool   `json:"configured"`
+}
+
+// tools: the programs lacarta runs, where it finds them.
+func tools() []toolOut {
+	set := core.SettingsRead().Tools
+	out := []toolOut{}
+	for _, t := range core.Tools {
+		p := core.ToolPath(t.K)
+		if t.K == "chromium" {
+			p = auditreport.Chromium()
+		}
+		out = append(out, toolOut{t.K, t.V, p, set[t.K] != ""})
+	}
+	return out
+}
+
 type questionSummary struct {
 	ID      string `json:"id"`
 	Title   string `json:"title"`
@@ -163,13 +184,14 @@ func summary(pid string, e *core.HubProject) projectSummary {
 }
 
 type projectPayload struct {
-	ID      string             `json:"id"`
-	State   *core.State        `json:"state"`
-	Derived *core.Derived      `json:"derived"`
-	Specs   *map[string]string `json:"specs,omitempty"` // software projects only, even when empty
-	Reports *map[string]string `json:"reports,omitempty"`
-	Chat    []hooks.ChatItem   `json:"chat"`
-	Audit   *auditPayload      `json:"audit,omitempty"`
+	ID      string              `json:"id"`
+	State   *core.State         `json:"state"`
+	Derived *core.Derived       `json:"derived"`
+	Specs   *map[string]string  `json:"specs,omitempty"` // software projects only, even when empty
+	Reports *map[string]string  `json:"reports,omitempty"`
+	Chat    []hooks.ChatItem    `json:"chat"`
+	Audit   *auditPayload       `json:"audit,omitempty"`
+	Config  *core.ProjectConfig `json:"config,omitempty"` // the project's config.json, when it has one
 }
 
 // auditPayload is what the audit views need from the run files.
@@ -257,6 +279,9 @@ func payload(pid string) (*projectPayload, error) {
 	}
 	if st.Template == core.Audit {
 		out.Audit = auditData(pid, st)
+	}
+	if pc := core.ProjectConfigRead(st); pc.Exists {
+		out.Config = pc
 	}
 	out.Chat = []hooks.ChatItem{}
 	if a := core.MustAgent(st, core.Orchestrator); a.Session != nil {
@@ -456,7 +481,7 @@ func (con *Console) get(w http.ResponseWriter, r *http.Request) {
 			e, _ := h.Projects.Get(k)
 			ps = append(ps, summary(k, e))
 		}
-		out := map[string]any{"projects": ps, "settings": core.SettingsRead(), "catalog": catalog()}
+		out := map[string]any{"projects": ps, "settings": core.SettingsRead(), "catalog": catalog(), "tools": tools()}
 		if all, err := plugins.List(); err == nil {
 			out["plugins"] = all
 		}

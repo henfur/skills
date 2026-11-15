@@ -300,7 +300,7 @@ func info(d Def, r *Registry, found map[string]string) *Info {
 		Source: d.Repo}
 	switch d.Type {
 	case TypeCheck:
-		if p, err := exec.LookPath(d.Program); err == nil {
+		if p := core.ToolPath(d.Program); p != "" {
 			i.Installed, i.Path, i.Ref = true, p, p
 		} else {
 			i.Problem = d.Program + " is not installed."
@@ -345,7 +345,7 @@ func Install(id string, out func(string)) error {
 		return core.Gate("No built-in plugin %s. Custom ones are added with `plugin add <git-url|path> --trust`.", id)
 	}
 	if d.Type == TypeCheck {
-		if _, err := exec.LookPath(d.Program); err != nil {
+		if core.ToolPath(d.Program) == "" {
 			return core.Gate("%s is a program lacarta runs; install it yourself: %s.", d.Program, d.InstallHint)
 		}
 		out(d.Program + " is installed.")
@@ -371,7 +371,7 @@ func Install(id string, out func(string)) error {
 	}
 	out(fmt.Sprintf("Cloning %s at %s…", d.Repo, d.Commit[:7]))
 	for _, args := range [][]string{{"clone", "--quiet", d.Repo, clone}, {"-C", clone, "checkout", "--quiet", d.Commit}} {
-		if b, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+		if b, err := exec.Command(gitPath(), args...).CombinedOutput(); err != nil {
 			return fmt.Errorf("git %s: %v\n%s", args[0], err, b)
 		}
 	}
@@ -423,7 +423,7 @@ func Add(source, ptype string, trust bool) (*Preview, error) {
 	if strings.Contains(source, "://") || strings.HasPrefix(source, "git@") {
 		tmp := filepath.Join(core.Home(), "plugins", ".fetch-"+core.Slug(source))
 		if _, err := os.Stat(tmp); err != nil {
-			if b, err := exec.Command("git", "clone", "--quiet", "--depth", "1", source, tmp).CombinedOutput(); err != nil {
+			if b, err := exec.Command(gitPath(), "clone", "--quiet", "--depth", "1", source, tmp).CombinedOutput(); err != nil {
 				return nil, fmt.Errorf("git clone: %v\n%s", err, b)
 			}
 		}
@@ -509,7 +509,8 @@ type ProjectPlugin struct {
 	Enabled bool   `json:"enabled"`
 	Need    string `json:"need"` // Required, Default or Optional for this project's kind
 	Pinned  string `json:"pinned"`
-	Drift   bool   `json:"drift"` // the installed version differs from the project's pin
+	Drift   bool   `json:"drift"`            // the installed version differs from the project's pin
+	Config  string `json:"config,omitempty"` // "project" when its config.json decides, "home" when the machine's default does
 }
 
 // ForProject lists the plugins of a project with their state there.
@@ -518,6 +519,8 @@ func ForProject(st *core.State) ([]*ProjectPlugin, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The project's config.json wins over the console's choice, which wins over the home default.
+	project, home := core.ProjectConfigRead(st).Plugins, core.SettingsRead().Plugins
 	out := []*ProjectPlugin{}
 	for _, i := range all {
 		need := i.Kinds[st.Template]
@@ -525,10 +528,19 @@ func ForProject(st *core.State) ([]*ProjectPlugin, error) {
 			need = Optional
 		}
 		p := &ProjectPlugin{Info: i, Need: need}
-		if pp := st.Plugins[i.ID]; pp != nil {
-			p.Enabled, p.Pinned = pp.Enabled, pp.Ref
+		usable := i.Installed && i.Problem == ""
+		pp := st.Plugins[i.ID]
+		if pp != nil {
+			p.Pinned = pp.Ref
+		}
+		if on, ok := project[i.ID]; ok {
+			p.Enabled, p.Config = on && usable, core.FromProject
+		} else if pp != nil {
+			p.Enabled = pp.Enabled
+		} else if on, ok := home[i.ID]; ok {
+			p.Enabled, p.Config = on && usable, core.FromHome
 		} else {
-			p.Enabled = (need == Required || need == Default) && i.Installed && i.Problem == ""
+			p.Enabled = (need == Required || need == Default) && usable
 		}
 		if need == Required {
 			p.Enabled = true
@@ -566,6 +578,9 @@ func SetEnabled(st *core.State, id string, on bool, by string) error {
 		}
 		if !on && p.Need == Required {
 			return core.Gate("%s is required for this kind of project.", p.Name)
+		}
+		if p.Config == core.FromProject {
+			return core.Gate("%s is set in this project's %s: change it there.", p.Name, core.ProjectConfigRead(st).Path)
 		}
 		if on && (!p.Installed || p.Problem != "") {
 			hint := p.Problem
@@ -605,6 +620,15 @@ func PinAll(st *core.State) error {
 		}
 	}
 	return nil
+}
+
+func gitPath() string { return firstNonEmpty(core.ToolPath("git"), "git") }
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func short(ref string) string {

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"lacarta/internal/core"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -54,7 +55,7 @@ func (s *Spec) defaults() {
 // Available says whether the sandbox can run here, and why not.
 func Available() error {
 	for _, p := range []string{"bwrap", "prlimit"} {
-		if _, err := exec.LookPath(p); err != nil {
+		if core.ToolPath(p) == "" {
 			return fmt.Errorf("%s is not installed", p)
 		}
 	}
@@ -74,10 +75,14 @@ func Available() error {
 	return nil
 }
 
-// resolve finds a program on the PATH. It keeps the name it was found under: multi-call
-// binaries (coreutils, busybox) act on the name they are called by.
+// resolve finds a program: the path ~/.lacarta/config.json sets for it, else on the PATH. It keeps
+// the name it was found under: multi-call binaries (coreutils, busybox) act on that name.
 func resolve(prog string) (string, error) {
-	p, err := exec.LookPath(prog)
+	p := prog
+	if !strings.Contains(prog, "/") {
+		p = core.ToolPath(prog)
+	}
+	p, err := exec.LookPath(p)
 	if err != nil {
 		return "", err
 	}

@@ -28,7 +28,7 @@ Re-record only when the prototype's behaviour changes on purpose, and read the d
 
 ```
 cmd/lacarta/       main
-internal/core/     state files, locking, migration, hub, settings, questions, gates, sessions
+internal/core/     state files, locking, migration, hub, config files, questions, gates, sessions
 internal/cli/      argument parsing and commands (output is a contract: agents read it)
 internal/hooks/    hook events, transcript reader, install (Claude Code)
 internal/server/   console daemon and API
@@ -55,6 +55,38 @@ skill's validator tests); `lacarta audit guide` is what the orchestrator agent f
 engagement and the coverage plan, reviews every finding and approves the report in the console; the final report is signed
 and `lacarta audit verify <final/vN>` checks it. Design and status: [`docs/design/security-audit.md`](docs/design/security-audit.md).
 `internal/cli/audit_test.go` drives a whole audit with the real validators (skipped on machines that can't run audits).
+
+## Configuration
+
+Two JSON files, each optional. Built-in defaults < `~/.lacarta/config.json` < the project's `config.json`
+(`<repo>/.lacarta/config.json` for a software project, the project's folder under `~/.lacarta/` for an audit or a task).
+`lacarta config` shows what is in effect and where each value comes from, `lacarta config check` lists what is ignored,
+`lacarta config init [--project]` creates a file to fill in. Keys starting with `//` are comments.
+
+```json
+{
+  "models": {"software": {"implementation": "sonnet"}, "audit": {"hunter": "opus"}},
+  "remote_control": true,
+  "auditor": "Ada Lovelace",
+  "templates": "~/lacarta-templates",
+  "plugins": {"gitleaks": true, "osv-scanner": false},
+  "tools": {"chromium": "/opt/chromium/chrome", "node": "~/.local/bin/node"}
+}
+```
+
+| Key | Home | Project | |
+| --- | --- | --- | --- |
+| `models` | `{kind: {role: model}}` | `{role: model}` | Read before every spawn. `models --set role=model [--project]` writes them; the console's Settings page writes the home ones. |
+| `remote_control` | default for every session | default for this project | The Chat toggle of a project still wins. |
+| `templates` | a folder | a folder inside the project | Spec templates `init` copies (`functional.md`, `architecture.md`, `stack.md`, `security.md`); a missing file falls back to the next layer, then the built-in one. |
+| `plugins` | on/off in new projects | on/off, locked in the console | The project's Plugins tab can't change a plugin its file sets. Required plugins stay on. |
+| `tools` | program paths | refused | `git`, `node`, `bwrap`, `prlimit`, `gitleaks`, `osv-scanner`, `chromium`; anything unset is found on `PATH`. |
+| `auditor` | the name on signed audit reports | refused | |
+
+A software project's file lives in its repository, so a cloned repository could ship one: it can't choose which programs
+lacarta runs or who signs, and its templates folder must stay inside the project. An invalid value is skipped with a
+warning (shown by `config check` and in the console) rather than stopping a session. The console's saves keep every key
+they don't change. A `~/.lacarta/settings.json` from before is read until the first save, which moves it into `config.json`.
 
 ## Console
 

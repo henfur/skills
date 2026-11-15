@@ -695,6 +695,7 @@ func NewAuditState(pid, name, target, repo, execution string) *State {
 		Stage:   "scope", Counters: map[string]int{},
 		Audit: &AuditState{Target: target, Repo: repo, Execution: execution, Runs: []*AuditRun{},
 			Reviews: map[string]*AuditReview{}, Recheck: map[string]string{}},
+		Root: target, Dir: AuditHome(pid),
 	}
 	return st
 }

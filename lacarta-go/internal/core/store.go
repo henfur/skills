@@ -98,6 +98,7 @@ func (s *Store) load() (*State, error) {
 	if err := json.Unmarshal(b, st); err != nil {
 		return nil, fmt.Errorf("%s: %w", s.Path(), err)
 	}
+	st.Root, st.Dir = s.Root, s.Dir
 	if err := Migrate(st); err != nil {
 		return nil, err
 	}

@@ -139,14 +139,16 @@ func commands() []*Cmd {
 		{Name: "agent list", Help: "All agents with their status.", Run: cmdAgentList},
 		{Name: "models", Help: "Show the model for each role of this kind of project (read it before every spawn).", Run: cmdModels,
 			Opts: []Opt{{Name: "json", Kind: flag}, {Name: "set", Kind: list, Metavar: "ROLE=MODEL",
-				Help: "Change a role's model as the user asked in the terminal. Models: " + aliases() + "."}}},
+				Help: "Change a role's model as the user asked in the terminal. Models: " + aliases() + "."},
+				{Name: "project", Kind: flag, Help: "With --set: write this project's config.json instead of the machine's " +
+					"(MODEL `default` removes the override)."}}},
 		{Name: "decide", Help: "Log a decision you made yourself.", Run: cmdDecide, Opts: []Opt{
 			{Name: "title", Required: true}, {Name: "decision", Required: true}, {Name: "rationale"},
 			{Name: "spec", Choices: specKeys()}, {Name: "phase"}}},
 		{Name: "final start", Run: cmdFinalStart},
 		{Name: "final complete", Run: cmdFinalComplete, Opts: []Opt{{Name: "summary"}}},
 	}
-	return append(cmds, auditCommands()...)
+	return append(append(cmds, auditCommands()...), configCommands()...)
 }
 
 // Main runs the command line and returns the exit code.
@@ -317,6 +319,16 @@ func self() string {
 
 // ---------------------------------------------------------------- commands
 
+// specTemplate reads a spec's template from the first config folder that has it, else the built-in one.
+func specTemplate(dirs []string, key string) ([]byte, error) {
+	for _, dir := range dirs {
+		if b, err := os.ReadFile(filepath.Join(dir, key+".md")); err == nil {
+			return b, nil
+		}
+	}
+	return skill.Templates.ReadFile("templates/" + key + ".md")
+}
+
 func cmdInit(a *Args) error {
 	root, _ := filepath.Abs(firstNonEmpty(a.Root, "."))
 	d := filepath.Join(root, core.StateDir)
@@ -330,12 +342,13 @@ func cmdInit(a *Args) error {
 	if err := os.MkdirAll(filepath.Join(d, "reviews"), 0o755); err != nil {
 		return err
 	}
+	tplDirs := core.TemplateDirs(&core.State{Template: core.Software, Root: root, Dir: d})
 	for _, k := range core.Specs {
 		target := filepath.Join(d, "specs", k.K+".md")
 		if _, err := os.Stat(target); err == nil {
 			continue
 		}
-		tpl, err := skill.Templates.ReadFile("templates/" + k.K + ".md")
+		tpl, err := specTemplate(tplDirs, k.K)
 		if err != nil {
 			return err
 		}
@@ -350,7 +363,7 @@ func cmdInit(a *Args) error {
 		Version: 1, Template: core.Software,
 		Project: core.Project{Name: name, Summary: a.Str("summary"), CreatedAt: core.Now()},
 		Stage:   "specification", Plan: core.Plan{Status: "draft"},
-		Counters: map[string]int{},
+		Counters: map[string]int{}, Root: root, Dir: d,
 	}
 	for _, k := range core.Specs {
 		st.Specs.Set(k.K, &core.Spec{Title: k.V, Status: "draft"})
@@ -1217,13 +1230,13 @@ func cmdDecisions(a *Args) error {
 	return nil
 }
 
-// cmdModels shows the models of the current project's kind; they are machine-wide.
+// cmdModels shows the models of the current project's kind: the machine's, over which the
+// project's config.json may set some roles.
 func cmdModels(a *Args) error {
+	st := currentState()
 	kind := core.Software
-	if store != nil {
-		if st, err := store.Read(); err == nil {
-			kind = st.Template
-		}
+	if st != nil {
+		kind = st.Template
 	}
 	if sets := a.List("set"); len(sets) > 0 {
 		roles := map[string]string{}
@@ -1231,22 +1244,42 @@ func cmdModels(a *Args) error {
 			role, model, _ := strings.Cut(item, "=")
 			roles[strings.TrimSpace(role)] = strings.TrimSpace(model)
 		}
-		if _, err := core.SettingsUpdate(map[string]map[string]string{kind: roles}, nil); err != nil {
+		if a.Flag("project") {
+			if st == nil {
+				return core.Gate("No project here: --project writes a project's config.json.")
+			}
+			if err := core.ProjectConfigSetModels(st, roles); err != nil {
+				return err
+			}
+		} else if _, err := core.SettingsUpdate(map[string]map[string]string{kind: roles}, nil); err != nil {
 			return err
 		}
+	} else if a.Flag("project") {
+		return &UsageError{"--project goes with --set"}
 	}
-	models, _ := core.SettingsRead().Models.Get(kind)
+	var rows []core.RoleModel
+	if st != nil {
+		rows = core.ModelsFor(st)
+	} else {
+		models, _ := core.SettingsRead().Models.Get(kind)
+		for _, r := range models.Keys() {
+			alias, _ := models.Get(r)
+			rows = append(rows, core.RoleModel{Role: r, Model: alias})
+		}
+	}
 	k := core.KindByID(kind)
 	if a.Flag("json") {
 		var out core.OMap[core.OMap[string]]
-		for _, r := range models.Keys() {
-			alias, _ := models.Get(r)
-			m, _ := core.ModelByAlias(alias)
+		for _, rm := range rows {
+			m, _ := core.ModelByAlias(rm.Model)
 			var e core.OMap[string]
-			e.Set("model", alias)
+			e.Set("model", rm.Model)
 			e.Set("name", m.Name)
 			e.Set("id", m.ID)
-			out.Set(r, e)
+			if rm.Source == core.FromProject {
+				e.Set("source", rm.Source)
+			}
+			out.Set(rm.Role, e)
 		}
 		b, err := core.MarshalIndent(out)
 		if err != nil {
@@ -1256,10 +1289,17 @@ func cmdModels(a *Args) error {
 		return nil
 	}
 	a.Printf("Models for %s projects (console Settings page):\n", strings.ToLower(k.Label))
-	for _, r := range models.Keys() {
-		alias, _ := models.Get(r)
-		role, _ := k.Role(r)
-		a.Printf("  %-24s %-7s %-11s %s\n", r, alias, core.ModelName(alias), role.Label)
+	fromProject := false
+	for _, rm := range rows {
+		role, _ := k.Role(rm.Role)
+		label := role.Label
+		if rm.Source == core.FromProject {
+			label, fromProject = label+" (this project's config.json)", true
+		}
+		a.Printf("  %-24s %-7s %-11s %s\n", rm.Role, rm.Model, core.ModelName(rm.Model), label)
+	}
+	if fromProject {
+		a.Printf("\nThis project's %s overrides the roles marked so.\n", core.ProjectConfigRead(st).Path)
 	}
 	a.Println("\nPass the alias (second column) as the Agent tool's `model` when you spawn that role. " +
 		"The session itself runs the first role's model: if it differs, ask the user to `/model <alias>`.")

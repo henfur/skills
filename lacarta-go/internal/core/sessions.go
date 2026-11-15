@@ -30,6 +30,7 @@ func CreateSingle(cwd string) (string, *Store, error) {
 		Version: 1, Template: Single,
 		Project: Project{Name: name, Cwd: cwd, CreatedAt: Now()},
 		Stage:   "active", Agents: []*Agent{}, Counters: map[string]int{},
+		Root: cwd, Dir: dir,
 	}
 	if err := Migrate(st); err != nil {
 		return "", nil, err
