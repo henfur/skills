@@ -128,6 +128,9 @@ var Kinds = []Kind{
 	{Audit, "Security audit",
 		"Cloudflare's security-audit skill run end to end, a coverage plan you approve, your review of every finding, " +
 			"and a signed report you approve.", AuditRoles},
+	{Desk, "Review desk",
+		"Watches merge requests on a forge and reviews them on a loop: one reviewer per profile (security, devops, code), " +
+			"comments from your templates, approvals only as the desk's policy and modes allow. Never merges.", DeskRoles},
 }
 
 var PlannedKinds = []string{"DevOps (Ansible, Terraform)"}

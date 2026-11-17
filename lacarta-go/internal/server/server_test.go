@@ -121,14 +121,16 @@ func getJSON(t *testing.T, url string) any {
 }
 
 // dropAuditKind removes what was added after the prototype was frozen: the security-audit kind
-// in the catalog, its models in the settings, the plugins, the config file's metadata, and the
+// and the review desk kind in the catalog, their models in the settings, the plugins, the config file's metadata, and the
 // fields the home page groups projects by.
 func dropAuditKind(hub any) {
 	h := hub.(map[string]any)
 	cat := h["catalog"].(map[string]any)
 	delete(cat["kinds"].(map[string]any), "audit")
+	delete(cat["kinds"].(map[string]any), "desk")
 	cat["planned"] = append([]any{"Security audit"}, cat["planned"].([]any)...)
 	delete(h["settings"].(map[string]any)["models"].(map[string]any), "audit")
+	delete(h["settings"].(map[string]any)["models"].(map[string]any), "desk")
 	delete(h["settings"].(map[string]any), "config")
 	delete(h, "tools")
 	for _, p := range h["projects"].([]any) {

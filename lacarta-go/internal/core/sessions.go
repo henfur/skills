@@ -102,7 +102,7 @@ func RegisterSession(sid, cwd, transcript, source string) (string, *Store, error
 		if err := json.Unmarshal(b, &head); err != nil {
 			return "", nil, err
 		}
-		if pid, err = RegisterSoftware(root, head.Project.Name); err != nil {
+		if pid, err = RegisterFolder(root, head.Project.Name); err != nil {
 			return "", nil, err
 		}
 		s = SoftwareStore(root)

@@ -30,6 +30,7 @@ type State struct {
 	MovedTo   string                    `json:"moved_to,omitempty"`
 	Plugins   map[string]*ProjectPlugin `json:"plugins,omitempty"` // enabled per project; see internal/plugins
 	Audit     *AuditState               `json:"audit,omitempty"`
+	Desk      *DeskState                `json:"desk,omitempty"`
 
 	// Where the state was read from: the project's folder and its state folder (config.json).
 	Root string `json:"-"`
@@ -128,13 +129,14 @@ type Effect struct {
 	Spec    string    `json:"spec,omitempty"`
 	Phase   *PhaseRef `json:"phase,omitempty"`
 	Finding string    `json:"finding,omitempty"`
+	Item    string    `json:"item,omitempty"` // a review desk's merge request, or the desk content hash
 }
 
 func (e *Effect) Equal(o *Effect) bool {
 	if e == nil || o == nil {
 		return e == o
 	}
-	return e.Type == o.Type && e.Spec == o.Spec && e.Finding == o.Finding && e.Phase.Equal(o.Phase)
+	return e.Type == o.Type && e.Spec == o.Spec && e.Finding == o.Finding && e.Phase.Equal(o.Phase) && sameItem(e, o)
 }
 
 type Answer struct {
@@ -296,3 +298,6 @@ func Where(p PhaseRef) string {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// sameItem: a desk's publish questions are one per merge request; its content question is one at a time.
+func sameItem(e, o *Effect) bool { return e.Type == "desk-content" || e.Item == o.Item }

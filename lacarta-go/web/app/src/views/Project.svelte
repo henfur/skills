@@ -13,6 +13,9 @@
   import AuditFindings from "./AuditFindings.svelte";
   import Report from "./Report.svelte";
   import Plugins from "./Plugins.svelte";
+  import DeskOverview from "./DeskOverview.svelte";
+  import DeskQueue from "./DeskQueue.svelte";
+  import DeskSettings from "./DeskSettings.svelte";
   import Icon from "../components/Icon.svelte";
   import Badge from "../components/Badge.svelte";
   import { app, L, kindOf } from "../lib/state.svelte.js";
@@ -26,6 +29,8 @@
     audit: [["overview", "Overview", AuditOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
       ["coverage", "Coverage", Coverage], ["findings", "Findings", AuditFindings], ["report", "Report", Report],
       ["plugins", "Plugins", Plugins], ["decisions", "Decisions", Decisions], ["activity", "Activity", Activity]],
+    desk: [["overview", "Overview", DeskOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
+      ["queue", "Queue", DeskQueue], ["desk", "Desk", DeskSettings], ["decisions", "Decisions", Decisions], ["activity", "Activity", Activity]],
     single: [["overview", "Overview", SingleOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
       ["activity", "Activity", Activity]],
   };
@@ -41,6 +46,7 @@
     report: d.audit?.latest_report ? [`v${d.audit.latest_report.version}`, false] : null,
     findings: d.audit ? (d.audit.has_findings ? [d.audit.to_review ? `${d.audit.to_review} to review` : (app.data.audit?.findings || []).length, d.audit.to_review > 0] : null) : d.open_findings ? [st.findings.filter(f => UNRESOLVED.has(f.status)).length, d.open_findings.critical + d.open_findings.high > 0] : null,
     decisions: [st.decisions.length, false],
+    queue: d.desk ? [d.desk.drafts ? `${d.desk.drafts} draft${d.desk.drafts === 1 ? "" : "s"}` : (d.desk.counts.queued || 0) + (d.desk.counts.reviewing || 0), d.desk.drafts > 0] : null,
     chat: d.pending_messages ? [`${d.pending_messages} queued`, false] : null,
   });
   const View = $derived(current[2]);

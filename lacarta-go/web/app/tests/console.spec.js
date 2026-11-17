@@ -28,8 +28,8 @@ test("home lists the projects and what waits for the user", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
   await expect(page.locator(".project-card .pname", { hasText: "login-fix" })).toBeVisible();
   await expect(page.locator(".project-card .pname", { hasText: "Shop" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Waiting for you · 2/ })).toBeVisible();
-  await expect(page).toHaveTitle(/^\(2\) Lacarta console/);
+  await expect(page.getByRole("heading", { name: /Waiting for you · 3/ })).toBeVisible();   // the task, the shop, the desk
+  await expect(page).toHaveTitle(/^\(3\) Lacarta console/);
   await expect(page.locator(".live")).toContainText("updated");
 });
 

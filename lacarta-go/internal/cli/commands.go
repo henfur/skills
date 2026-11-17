@@ -148,7 +148,7 @@ func commands() []*Cmd {
 		{Name: "final start", Run: cmdFinalStart},
 		{Name: "final complete", Run: cmdFinalComplete, Opts: []Opt{{Name: "summary"}}},
 	}
-	return append(append(cmds, auditCommands()...), configCommands()...)
+	return append(append(append(cmds, auditCommands()...), deskCommands()...), configCommands()...)
 }
 
 // Main runs the command line and returns the exit code.
@@ -243,7 +243,7 @@ func resolveStore(a *Args) (*core.Store, error) {
 			if err != nil {
 				return nil, err
 			}
-			if _, err := core.RegisterSoftware(root, name); err != nil {
+			if _, err := core.RegisterFolder(root, name); err != nil {
 				return nil, err
 			}
 		}
@@ -267,7 +267,7 @@ func projectName(root string) (string, error) {
 }
 
 func hookEvents() []string {
-	return []string{"session-start", "prompt", "post-tool", "notification", "stop", "session-end"}
+	return []string{"session-start", "prompt", "post-tool", "notification", "stop", "session-end", "pre-tool"}
 }
 
 func cmdServe(a *Args) error {
@@ -1140,6 +1140,10 @@ type waitTalk struct {
 func cmdAnswer(a *Args) error {
 	id := a.Positional("id")
 	err := store.Edit(func(st *core.State) error {
+		if q, err := core.GetQuestion(st, id); err == nil && q.Effect != nil && strings.HasPrefix(q.Effect.Type, "desk-") {
+			return core.Gate("%s is answered in the console only: publishing under the desk's identity, and accepting the "+
+				"desk's content, are the user's own decisions.", id)
+		}
 		_, err := core.AnswerQuestion(st, id, a.Str("choice"), a.Str("comment"), "user (terminal)")
 		return err
 	})

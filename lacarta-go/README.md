@@ -32,6 +32,8 @@ internal/core/     state files, locking, migration, hub, config files, questions
 internal/cli/      argument parsing and commands (output is a contract: agents read it)
 internal/hooks/    hook events, transcript reader, install (Claude Code)
 internal/server/   console daemon and API
+internal/desk/      review desks: poll, claim, briefs, records, plans, publishing, the session's command guard
+internal/forge/     GitLab through glab (and forgetest, a fake glab for tests)
 internal/plugins/  plugin registry, the security-audit skill as a required plugin, preflight, validators, check tools
 internal/sandbox/  bubblewrap sandbox for target code, check tools and validators
 internal/auditreport/  audit report (markdown, print HTML, PDF), approval, verification
@@ -55,6 +57,16 @@ skill's validator tests); `lacarta audit guide` is what the orchestrator agent f
 engagement and the coverage plan, reviews every finding and approves the report in the console; the final report is signed
 and `lacarta audit verify <final/vN>` checks it. Design and status: [`docs/design/security-audit.md`](docs/design/security-audit.md).
 `internal/cli/audit_test.go` drives a whole audit with the real validators (skipped on machines that can't run audits).
+
+## Review desks
+
+A review desk watches merge requests on one GitLab instance and reviews them on a loop: `lacarta desk init` makes a
+folder a desk (its `.lacarta/config.json` "desk" key holds the forge, targets, profiles with their modes, policy and
+schedule; `instructions/` and `templates/` are the team's), `lacarta desk guide` is what the orchestrator agent follows.
+Agents read GitLab with a read-only identity and write records; lacarta posts what the policy and the profiles' modes
+(shadow by default) allow, and the user publishes the rest from the console. It never merges. Both identities are glab
+config folders inside this environment's own config folder. Design and status: [`docs/design/pr-review.md`](docs/design/pr-review.md).
+`internal/cli/desk_test.go` drives whole desks against a fake GitLab (the test binary acts as `glab`).
 
 ## Configuration
 
@@ -93,8 +105,9 @@ everywhere. Tasks are no longer named after their first prompt. A session in the
 | `models` | `{kind: {role: model}}` | `{role: model}` | Read before every spawn. `models --set role=model [--project]` writes them; the console's Settings page writes the home ones. |
 | `remote_control` | default for every session | default for this project | The Chat toggle of a project still wins. |
 | `templates` | a folder | a folder inside the project | Spec templates `init` copies (`functional.md`, `architecture.md`, `stack.md`, `security.md`); a missing file falls back to the next layer, then the built-in one. |
+| `desk` | refused | a review desk's settings | Forge, targets, filters, profiles and their modes, policy, schedule (see the desk design). |
 | `plugins` | on/off in new projects | on/off, locked in the console | The project's Plugins tab can't change a plugin its file sets. Required plugins stay on. |
-| `tools` | program paths | refused | `git`, `node`, `bwrap`, `prlimit`, `gitleaks`, `osv-scanner`, `chromium`; anything unset is found on `PATH`. |
+| `tools` | program paths | refused | `git`, `node`, `bwrap`, `prlimit`, `gitleaks`, `osv-scanner`, `chromium`, `glab`; anything unset is found on `PATH`. |
 | `auditor` | the name on signed audit reports | refused | |
 
 A software project's file lives in its repository, so a cloned repository could ship one: it can't choose which programs

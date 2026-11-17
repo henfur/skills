@@ -45,6 +45,7 @@ var Tools = []KV{
 	{"gitleaks", "the gitleaks check"},
 	{"osv-scanner", "the osv-scanner check"},
 	{"chromium", "prints audit reports to PDF"},
+	{"glab", "talks to GitLab for review desks"},
 }
 
 // Where a value comes from.
@@ -618,10 +619,18 @@ func ProjectConfigRead(st *State) *ProjectConfig {
 				pc.Plugins = nil
 				warn("plugins: expected {\"<plugin id>\": true or false}.")
 			}
+		case "desk":
+			if st.Template != Desk {
+				warn("desk: only review desks have desk settings.")
+				continue
+			}
+			for _, w := range DeskConfigRead(st).Warnings {
+				warn("%s", w)
+			}
 		case "tools", "auditor":
 			warn("%s: can only be set in %s, not in a project.", key, HomeConfigPath())
 		default:
-			warn("unknown setting %q. A project can set: id, name, models, remote_control, templates, plugins.", key)
+			warn("unknown setting %q. A project can set: id, name, models, remote_control, templates, plugins (and desk, for a review desk).", key)
 		}
 	}
 	return pc

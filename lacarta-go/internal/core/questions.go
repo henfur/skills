@@ -147,6 +147,10 @@ func applyEffect(st *State, q *Question) error {
 		applyAuditEffect(st, q)
 		return nil
 	}
+	if strings.HasPrefix(e.Type, "desk-") && st.Desk != nil {
+		applyDeskEffect(st, q)
+		return nil
+	}
 	switch e.Type {
 	case "spec-approval":
 		s := st.Spec(e.Spec)

@@ -64,7 +64,38 @@ if "$L" audit preflight > "$RUN/preflight.txt" 2>&1; then
   A audit summary --text "One high finding: any user can update any order." > /dev/null
 fi
 
-printf '{"task":"%s","done":"%s","shop":"%s","audit":"%s","lacarta":"%s","home":"%s","shopRoot":"%s"}\n' \
-  "$TASK" "$DONE" "$SHOP" "$AUDIT" "$L" "$LACARTA_HOME" "$RUN/shop" > "$RUN/ids.json"
+# A review desk with a review waiting for the user. GitLab is the Go tests' fake glab: the cli test
+# binary acts as glab when it runs under that name.
+mkdir -p "$RUN/bin" "$WORK/xdg/glab-desk-write" "$WORK/xdg/glab-desk-read" "$RUN/desk/.lacarta"
+go test -c -o "$RUN/bin/glab" ./internal/cli
+export PATH="$RUN/bin:$PATH" XDG_CONFIG_HOME="$WORK/xdg" LACARTA_FAKE_GLAB="$RUN/gitlab.json"
+cat > "$LACARTA_FAKE_GLAB" <<'JSON'
+{"host": "gitlab.example.com", "next_id": 100,
+ "identities": {"glab-desk-write": {"user": "review-bot", "scopes": ["api"]}, "glab-desk-read": {"user": "reader", "scopes": ["read_api"]}},
+ "mrs": [{"project_id": 3, "project": "acme/billing", "iid": 7, "title": "Export downloads", "state": "opened", "author": "dev",
+   "sha": "aaa1111111111111", "base_sha": "base000000000000", "source_branch": "export", "target_branch": "main", "labels": [],
+   "pipeline": "success", "updated_at": "2026-11-17T10:00:00Z",
+   "changes": [{"old_path": "src/export.go", "new_path": "src/export.go", "diff": "@@ -1 +1,3 @@\n+func Download(id string) {\n+}\n"}]}]}
+JSON
+cat > "$RUN/desk/.lacarta/config.json" <<JSON
+{"name": "Platform desk", "desk": {"forge": {"type": "gitlab", "host": "gitlab.example.com", "identity": "review-bot",
+  "write_config": "$WORK/xdg/glab-desk-write", "read_config": "$WORK/xdg/glab-desk-read"},
+  "targets": [{"group": "acme"}], "profiles": {"code": {"mode": "shadow"}}}}
+JSON
+DESK=$("$L" desk init --folder "$RUN/desk" | sed -n 's/^Review desk \([a-z0-9-]*\) in .*/\1/p')
+D() { "$L" --project "$DESK" "$@"; }
+D desk next --timeout 10 > /dev/null
+cat > "$RUN/code.json" <<'JSON'
+{"profile": "code", "mr": {"project": "acme/billing", "iid": 7, "head_sha": "aaa1111111111111"}, "status": "complete",
+ "verdict": "comments", "summary": "Adds the export download; one missing test.", "notes": [], "injection_attempts": [],
+ "findings": [{"id": "F-1", "fingerprint": "tests:src/export.go:Download", "class": "tests", "severity": "medium",
+   "title": "Download has no test", "file": "src/export.go", "line": 1, "table": "The new download path is untested.",
+   "body": "Nothing covers Download.", "fix": "Add a test for a missing id.", "confidence": "confirmed"}]}
+JSON
+D desk submit "$RUN/code.json" --item 'acme/billing!7' --profile code > /dev/null
+D desk done 'acme/billing!7' > /dev/null
+
+printf '{"task":"%s","done":"%s","shop":"%s","audit":"%s","desk":"%s","lacarta":"%s","home":"%s","shopRoot":"%s","gitlab":"%s"}\n' \
+  "$TASK" "$DONE" "$SHOP" "$AUDIT" "$DESK" "$L" "$LACARTA_HOME" "$RUN/shop" "$LACARTA_FAKE_GLAB" > "$RUN/ids.json"
 unset LACARTA_NO_DAEMON
 exec "$L" serve --port "${PORT:-4799}"

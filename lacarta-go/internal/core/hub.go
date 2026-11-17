@@ -106,7 +106,27 @@ func Slug(text string) string {
 }
 
 // RegisterSoftware adds a software project to the hub (idempotent) and returns its id.
-func RegisterSoftware(root, name string) (string, error) {
+func RegisterSoftware(root, name string) (string, error) { return registerFolder(root, name, Software) }
+
+// RegisterFolder adds the project whose state is in <root>/.lacarta (a software project or a review
+// desk) to the hub.
+func RegisterFolder(root, name string) (string, error) {
+	return registerFolder(root, name, FolderTemplate(root))
+}
+
+// FolderTemplate: the kind of the project in <root>/.lacarta; software when the state doesn't say.
+func FolderTemplate(root string) string {
+	var head struct {
+		Template string `json:"template"`
+	}
+	b, _ := os.ReadFile(filepath.Join(root, StateDir, "state.json"))
+	if json.Unmarshal(b, &head) != nil || head.Template != Desk {
+		return Software
+	}
+	return Desk
+}
+
+func registerFolder(root, name, template string) (string, error) {
 	root, _ = filepath.Abs(root)
 	cfg := filepath.Join(root, StateDir, ConfigFile)
 	id := configID(cfg)
@@ -114,7 +134,7 @@ func RegisterSoftware(root, name string) (string, error) {
 	copied := false
 	err := HubEdit(func(h *Hub) error {
 		if id != "" {
-			if p, ok := h.Projects.Get(id); ok && p.Template == Software {
+			if p, ok := h.Projects.Get(id); ok && p.Template == template {
 				switch {
 				case p.Root == root:
 				case configID(filepath.Join(p.Root, StateDir, ConfigFile)) == id:
@@ -128,7 +148,7 @@ func RegisterSoftware(root, name string) (string, error) {
 				}
 			} else if !ok {
 				pid = id // the console forgot it (or a new machine): keep the project's id
-				h.Projects.Set(pid, &HubProject{ID: pid, Template: Software, Name: name, Root: root, CreatedAt: Now()})
+				h.Projects.Set(pid, &HubProject{ID: pid, Template: template, Name: name, Root: root, CreatedAt: Now()})
 				return nil
 			}
 		}
@@ -141,7 +161,7 @@ func RegisterSoftware(root, name string) (string, error) {
 			}
 		}
 		pid = NewProjectID(Slug(name))
-		h.Projects.Set(pid, &HubProject{ID: pid, Template: Software, Name: name, Root: root, CreatedAt: Now()})
+		h.Projects.Set(pid, &HubProject{ID: pid, Template: template, Name: name, Root: root, CreatedAt: Now()})
 		return nil
 	})
 	if err != nil {

@@ -87,6 +87,19 @@ Exit: a clean machine goes from install to an approved phase 1 of a new project,
 
 Phase 1 kept the prototype's shape: functions in `internal/core/workflow.go` and `internal/cli/commands.go` branch on `st.Template`. Extract the interface sketched in the plan (`Roles`, `Commands`, `Refresh`, `NextAction`, `Derived`) once a second real kind shows what it must cover. Build the security-audit kind on it, with its own skill instructions and console views. Exit: added without editing `state`, `hub`, `hooks` or `server` code paths beyond registering the kind.
 
+## Phase 6: the review kind (MR / PR review desk)
+
+**First version implemented (2026-11-17), not committed, not yet run against a real GitLab:** [`lacarta-go/docs/design/pr-review.md`](../lacarta-go/docs/design/pr-review.md).
+A desk is a folder with its own instructions, skills, tools and comment templates. It watches projects and groups on one
+GitLab instance and reviews new and updated MRs on a loop: one orchestrator session, one subagent per profile (security,
+devops, code). Agents get a read-only identity and write records; lacarta posts from templates according to a per-profile
+mode (shadow by default, set in the desk's `config.json`) and an action policy. Never merges. Kind id `desk`, commands
+`lacarta desk …`. The design doc's "Implementation status" lists what was built, the differences and what is left. The
+`Kind` interface is still not extracted (the desk branches like the audit): do it next, with three kinds to cover.
+**The binary in `~/.local/bin` is not rebuilt**: replace it only when the user asks.
+**Open security item O-3** (design doc §13): agents run as the same OS user as the publisher, so the write identity
+isn't isolated from them. The user chose to record it and not act now; proposed fix: a separate OS user for publishing.
+
 ## Later improvements: report provenance
 
 Both are parked by the user for later. They build on the security-audit design's §4.8 (AI-assistance disclosure and provenance);

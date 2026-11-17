@@ -26,6 +26,7 @@ import (
 
 	"lacarta/internal/auditreport"
 	"lacarta/internal/core"
+	"lacarta/internal/desk"
 	"lacarta/internal/hooks"
 	"lacarta/internal/plugins"
 	"lacarta/web"
@@ -221,6 +222,7 @@ type projectPayload struct {
 	Reports *map[string]string  `json:"reports,omitempty"`
 	Chat    []hooks.ChatItem    `json:"chat"`
 	Audit   *auditPayload       `json:"audit,omitempty"`
+	Desk    *deskPayload        `json:"desk,omitempty"`
 	Config  *core.ProjectConfig `json:"config,omitempty"` // the project's config.json, when it has one
 }
 
@@ -309,6 +311,9 @@ func payload(pid string) (*projectPayload, error) {
 	}
 	if st.Template == core.Audit {
 		out.Audit = auditData(pid, st)
+	}
+	if st.Template == core.Desk && st.Desk != nil {
+		out.Desk = deskData(pid, st)
 	}
 	if pc := core.ProjectConfigRead(st); pc.Exists {
 		out.Config = pc
@@ -648,6 +653,30 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 			}
 			st.Audit.Summary, st.Audit.SummaryBy = strings.TrimSpace(str("text", 20_000)), "user"
 			core.Log(st, "You edited the executive summary.", "stage")
+		case "desk-edit":
+			if st.Desk == nil {
+				return errNotFound
+			}
+			err = desk.EditStep(pid, st, str("item", 0), str("step", 0), str("body", 60_000))
+		case "desk-mode":
+			if st.Desk == nil {
+				return errNotFound
+			}
+			accepted := st.Desk.Seen == "" || st.Desk.Seen == st.Desk.Hash
+			if err = core.SetDeskMode(st, str("profile", 0), str("mode", 0)); err == nil {
+				core.Log(st, fmt.Sprintf("You set the mode of %s to %s.", str("profile", 0), str("mode", 0)), "stage")
+				if accepted { // your own change from the console: nothing else to accept
+					st.Desk.Hash = core.DeskHash(st.Root)
+				}
+				core.DeskCheckContent(st)
+			}
+		case "desk-pause":
+			if st.Desk == nil {
+				return errNotFound
+			}
+			on, _ := body["paused"].(bool)
+			st.Desk.Paused = on
+			core.Log(st, map[bool]string{true: "You paused the desk: nothing is posted or started.", false: "You resumed the desk."}[on], "stage")
 		case "approve":
 			result, err = auditreport.Approve(pid, st, core.SettingsRead().Auditor, str("hash", 0))
 		case "plugin":
@@ -677,6 +706,13 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 	if err != nil {
 		gateOr500(w, err)
 		return
+	}
+	if q, ok := result.(*core.Question); ok && q.Effect != nil && strings.HasPrefix(q.Effect.Type, "desk-") || action == "desk-pause" {
+		// Your answer may publish a plan with the desk's write identity, or close a discarded one.
+		if err := desk.Settle(pid, s); err != nil {
+			send(w, 200, map[string]any{"ok": true, "result": result, "warning": "Publishing: " + err.Error()})
+			return
+		}
 	}
 	send(w, 200, map[string]any{"ok": true, "result": result})
 }
@@ -839,4 +875,34 @@ func EnsureDaemon(self string) *core.DaemonInfo {
 		}
 	}
 	return nil
+}
+
+// deskPayload is what the review desk's views need beyond the state: each recent merge request
+// with its plan (the drafts) and its records.
+type deskPayload struct {
+	Items []*deskItemView `json:"items"`
+}
+
+type deskItemView struct {
+	*core.DeskItem
+	Plan    *core.DeskPlan              `json:"plan"`
+	Records map[string]*core.DeskRecord `json:"records"`
+}
+
+func deskData(pid string, st *core.State) *deskPayload {
+	out := &deskPayload{Items: []*deskItemView{}}
+	keys := st.Desk.Items.Keys()
+	for i := len(keys) - 1; i >= 0 && len(out.Items) < 60; i-- {
+		it, _ := st.Desk.Items.Get(keys[i])
+		v := &deskItemView{DeskItem: it, Records: map[string]*core.DeskRecord{}}
+		if it.HeadSHA != "" {
+			dir := core.ItemDir(pid, it)
+			v.Plan, _ = core.ReadPlan(dir)
+			if recs, err := core.ReadRecords(dir); err == nil {
+				v.Records = recs
+			}
+		}
+		out.Items = append(out.Items, v)
+	}
+	return out
 }
