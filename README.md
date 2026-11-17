@@ -1,5 +1,9 @@
 # lacarta
 
+<p align="center">
+  <img width=300 src="./assets/logo.png" />
+</p>
+
 An agent skill that runs every project through the same framework:
 
 1. **Specification**: functional, architecture, tech stack, and security / threat model specs, plus a phase plan, each approved by you.
