@@ -26,7 +26,7 @@ test.afterEach(async ({ page }) => {
 test("home lists the projects and what waits for the user", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
-  await expect(page.locator(".project-card .pname", { hasText: "Fix the login bug" })).toBeVisible();
+  await expect(page.locator(".project-card .pname", { hasText: "login-fix" })).toBeVisible();
   await expect(page.locator(".project-card .pname", { hasText: "Shop" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Waiting for you · 2/ })).toBeVisible();
   await expect(page).toHaveTitle(/^\(2\) Lacarta console/);
@@ -106,12 +106,21 @@ test("config files: the machine's on Settings, a project's over it", async ({ pa
   }
 });
 
-test("archive an ended task", async ({ page }) => {
+test("inactive sessions are listed compactly, empty ones folded, and archived", async ({ page }) => {
   await page.goto("/");
-  const card = page.locator(".project-card", { has: page.locator(`a[href="#/p/${ids().done}/overview"]`) });
-  await card.getByRole("button", { name: "Archive" }).click();
+  const inactive = page.locator(".inactive-row", { hasText: "Release notes" });
+  await expect(inactive).toContainText("Ended");
+  await expect(page.locator(".project-card", { hasText: "Release notes" })).toHaveCount(0);
+  await expect(page.locator("nav.side")).not.toContainText("Release notes");
+  await expect(page.locator("nav.side")).toContainText(/\d inactive: see All projects/);
+  await expect(page.locator(`.inactive-row a[href="#/p/${ids().done}/chat"]`)).toHaveCount(0);  // folded
+  await expect(page.getByText("1 empty session")).toBeVisible();
+  await inactive.getByRole("button", { name: "Archive" }).click();
   await expect(page.getByRole("button", { name: /Show archived · 1/ })).toBeVisible();
-  await expect(card).toHaveCount(0);
+  await page.getByRole("button", { name: "Archive them" }).click();
+  await expect(page.getByRole("button", { name: /Show archived · 2/ })).toBeVisible();
+  await expect(inactive).toHaveCount(0);
+  await expect(page.getByText("1 empty session")).toHaveCount(0);
 });
 
 test("live: a question asked from the CLI appears without reload, with a toast", async ({ page }) => {

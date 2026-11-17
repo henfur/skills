@@ -37,7 +37,8 @@ Run commands from the project root, or anywhere below it. When the lacarta hooks
 
 | When | Command |
 | --- | --- |
-| New project | `init [--name "<name>"] [--summary "<one line>"]` (name defaults to the folder) |
+| Security audit of a codebase | `audit init --target <folder>` (not `init`), then follow `audit guide` |
+| New project | `init [--name "<name>"] [--summary "<one line>"]` (name defaults to the one in `.lacarta/config.json`, else the folder; `init` saves it there) |
 | Register a subagent before spawning it | `agent start --role ... --task ...`; then `agent done <id>`; `agent list` |
 | Models for each role | `models` (`--json`); the user sets them on the console's Settings page; `models --set role=alias` only when they ask in the terminal |
 | Console URL, or start it | `serve` prints the URL if it runs (sessions start it on their own); otherwise run it in the background |
@@ -62,7 +63,7 @@ Approvals (`spec submit`, `plan submit`, `phase complete`, `final complete`) and
 **New project, or "bootstrap" on a blank folder.**
 
 ```bash
-python3 $L init                      # name = folder name unless the user gave one; prints the console URL
+python3 $L init                      # name = .lacarta/config.json's, else the folder's, unless the user gave one; prints the console URL
 ```
 
 `init` registers the project in the console (and starts the console if needed). If this session was registered as a single-agent task, it moves into the new project; the user sees it switch. Tell the user the console URL, then run `models` and check the `orchestrator` line against the model you are running as: if it differs, say so and ask the user to switch with `/model <alias>` (you cannot switch yourself). Then ask what the project is (in the console, `ask --kind question`, unless they already told you) and begin the specification stage. If the user wants the console on another address, it is started by hand with `serve --host <ip>`, which prints a URL with a key; give them that URL.
@@ -90,7 +91,7 @@ The console shows every agent with its name, picture placeholder, role, model an
 - You are the orchestrator, agent `A-1` (named at `init`). Your commands are attributed to you by default.
 - **Before every spawn**, register the subagent: `agent start --role <role> --task "<one line>" [--phase N|spec|final]`. It prints the agent's id, name and model alias. In every prompt template, fill `{NAME}` with that name and `{L}` with `<abs path>/lacarta.py --agent <id>`, so everything the subagent records (reviews, findings, questions) carries its name.
 - When the subagent returns: `agent done <id> --summary "<one line>"`, or `--failed`. Questions it asked stay open in the console; you act on the answers.
-- `agent update <id> --task "..."` when you send an agent back with new work (fixes after a review, for instance); `agent rename <id> --name ...` only when the user asks.
+- `agent update <id> --task "..."` when you send an agent back with new work (fixes after a review, for instance); `agent rename <id> --name ...` only when the user asks. The project's name is the `name` in its `.lacarta/config.json` (`lacarta config` shows the file): change it there when the user asks to rename the project.
 - An agent with an unanswered question shows as "Waiting for you" automatically.
 
 ## Talking to the user

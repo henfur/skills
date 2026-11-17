@@ -55,7 +55,8 @@ type Project struct {
 	Summary   string `json:"summary"`
 	CreatedAt string `json:"created_at"`
 	Cwd       string `json:"cwd,omitempty"`
-	Named     bool   `json:"named,omitempty"`
+	Named     bool   `json:"named,omitempty"`    // named after its first prompt (before config files named projects)
+	Prompted  bool   `json:"prompted,omitempty"` // a task whose session got a prompt
 }
 
 type Spec struct {

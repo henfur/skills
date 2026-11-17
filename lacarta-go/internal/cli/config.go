@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -44,9 +45,10 @@ func cmdConfig(a *Args) error {
 	st := currentState()
 	a.Printf("Home config     %s (%s)\n", s.Config.Path, exists(s.Config.Path))
 	var pc *core.ProjectConfig
-	if st != nil && st.Dir != "" {
+	if st != nil {
 		pc = core.ProjectConfigRead(st)
-		a.Printf("Project config  %s (%s)\n", pc.Path, exists(pc.Path))
+		a.Printf("Project config  %s (%s)\n", firstNonEmpty(pc.Path, "none for a task in the home folder"), exists(pc.Path))
+		a.Printf("Name            %s\n", st.Project.Name)
 		a.Printf("\nModels for this %s project:\n", strings.ToLower(core.KindByID(st.Template).Label))
 		for _, rm := range core.ModelsFor(st) {
 			a.Printf("  %-24s %-7s %s\n", rm.Role, rm.Model, source(rm.Source))
@@ -162,7 +164,7 @@ func configWarnings(s *core.Settings, pc *core.ProjectConfig) []string {
 
 func cmdConfigCheck(a *Args) error {
 	var pc *core.ProjectConfig
-	if st := currentState(); st != nil && st.Dir != "" {
+	if st := currentState(); st != nil {
 		pc = core.ProjectConfigRead(st)
 	}
 	warns := configWarnings(core.SettingsRead(), pc)
@@ -186,7 +188,8 @@ const homeConfigTemplate = `{
 `
 
 const projectConfigTemplate = `{
-  "//": "lacarta's settings for this project, over ~/.lacarta/config.json. models: {\"<role>\": \"<model>\"} (` + "`lacarta models`" + ` lists the roles); templates: a folder in the project with your own spec templates; plugins: {\"<plugin id>\": true or false}.",
+  "//": "lacarta's settings for this project, over ~/.lacarta/config.json. name: the project's name everywhere; models: {\"<role>\": \"<model>\"} (` + "`lacarta models`" + ` lists the roles); templates: a folder in the project with your own spec templates; plugins: {\"<plugin id>\": true or false}.",
+  "name": NAME,
   "models": {}
 }
 `
@@ -202,10 +205,15 @@ func cmdConfigInit(a *Args) error {
 	}
 	if a.Flag("project") {
 		st := currentState()
-		if st == nil || st.Dir == "" {
+		if st == nil {
 			return core.Gate("No project here: run it inside a project, or without --project for the home config.")
 		}
-		path, body = filepath.Join(st.Dir, core.ConfigFile), projectConfigTemplate
+		path = core.ProjectConfigPath(st.Template, store)
+		if path == "" {
+			return core.Gate("A task in the home folder has no config file: ~/.lacarta is lacarta's own.")
+		}
+		name, _ := json.Marshal(st.Project.Name)
+		body = strings.Replace(projectConfigTemplate, "NAME", string(name), 1)
 	}
 	if _, err := os.Stat(path); err == nil {
 		return core.Gate("%s already exists.", path)

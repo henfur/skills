@@ -58,8 +58,20 @@ and `lacarta audit verify <final/vN>` checks it. Design and status: [`docs/desig
 
 ## Configuration
 
-Two JSON files, each optional. Built-in defaults < `~/.lacarta/config.json` < the project's `config.json`
-(`<repo>/.lacarta/config.json` for a software project, the project's folder under `~/.lacarta/` for an audit or a task).
+Two JSON files. Built-in defaults < `~/.lacarta/config.json` < the project's `config.json`: `<repo>/.lacarta/config.json`
+for a software project; for a single-agent task, `.lacarta/config.json` at the root of the git repository it works in (else
+in its folder), shared by every task there; for an audit, beside its state under `~/.lacarta/audits/`, never in the audited code.
+
+The project's file holds its `id`, a random id the console knows it by (`t-3f9a1c` for a task, `<slug>-<6 hex>` for a
+software project), so a project is tracked by its folder: a new session in that folder (or its git repository) continues
+the same task, even after it ended or was archived; a moved folder keeps its project; a copied folder gets an id of its
+own. A second session started while the folder's task still has a live one (written in the last 30 minutes) is a task
+of its own; a resumed conversation always rejoins. Leave `id` as it is.
+
+The project's file also names the project. A session's first registration in a folder, and `init`, create it with
+`{"name": "<git repository's name, else the folder's>"}` (`init --name` writes that name); edit it to rename the project
+everywhere. Tasks are no longer named after their first prompt. A session in the home folder gets no file:
+`~/.lacarta` is lacarta's own.
 `lacarta config` shows what is in effect and where each value comes from, `lacarta config check` lists what is ignored,
 `lacarta config init [--project]` creates a file to fill in. Keys starting with `//` are comments.
 
@@ -76,6 +88,8 @@ Two JSON files, each optional. Built-in defaults < `~/.lacarta/config.json` < th
 
 | Key | Home | Project | |
 | --- | --- | --- | --- |
+| `id` | refused | set by lacarta | The project's id in the console. |
+| `name` | refused | the project's name | Shown everywhere instead of the name in the state. |
 | `models` | `{kind: {role: model}}` | `{role: model}` | Read before every spawn. `models --set role=model [--project]` writes them; the console's Settings page writes the home ones. |
 | `remote_control` | default for every session | default for this project | The Chat toggle of a project still wins. |
 | `templates` | a folder | a folder inside the project | Spec templates `init` copies (`functional.md`, `architecture.md`, `stack.md`, `security.md`); a missing file falls back to the next layer, then the built-in one. |

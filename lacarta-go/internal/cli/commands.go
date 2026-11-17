@@ -60,7 +60,7 @@ func aliases() string {
 func commands() []*Cmd {
 	cmds := []*Cmd{
 		{Name: "init", Help: "Create .lacarta/ with spec templates.", Run: cmdInit, Opts: []Opt{
-			{Name: "name", Help: "Project name (default: the folder's name)."}, {Name: "summary"}}},
+			{Name: "name", Help: "Project name, saved in .lacarta/config.json (default: the name there, else the folder's name)."}, {Name: "summary"}}},
 		{Name: "status", Help: "Stage, gates, open items and the next expected action.", Run: cmdStatus,
 			Opts: []Opt{{Name: "json", Kind: flag}}},
 		{Name: "serve", Help: "Run the console for every project on this machine (loopback by default). Sessions start " +
@@ -335,14 +335,15 @@ func cmdInit(a *Args) error {
 	if _, err := os.Stat(filepath.Join(d, "state.json")); err == nil {
 		return core.Gate("%s already exists. Use `status` to resume.", d)
 	}
-	name := firstNonEmpty(a.Str("name"), filepath.Base(root))
+	draft := &core.State{Template: core.Software, Root: root, Dir: d}
+	name := firstNonEmpty(a.Str("name"), core.ProjectConfigRead(draft).Name, filepath.Base(root))
 	if err := os.MkdirAll(filepath.Join(d, "specs"), 0o755); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(d, "reviews"), 0o755); err != nil {
 		return err
 	}
-	tplDirs := core.TemplateDirs(&core.State{Template: core.Software, Root: root, Dir: d})
+	tplDirs := core.TemplateDirs(draft)
 	for _, k := range core.Specs {
 		target := filepath.Join(d, "specs", k.K+".md")
 		if _, err := os.Stat(target); err == nil {
@@ -370,6 +371,13 @@ func cmdInit(a *Args) error {
 	}
 	if err := core.Migrate(st); err != nil { // registers the orchestrator
 		return err
+	}
+	if a.Str("name") != "" {
+		if err := core.ProjectConfigSetName(st, name); err != nil {
+			return err
+		}
+	} else {
+		core.EnsureProjectConfig(st, name, "")
 	}
 	core.Log(st, fmt.Sprintf("Project %s initialised.", name), "stage")
 	if err := core.WriteJSON(filepath.Join(d, "state.json"), st); err != nil {

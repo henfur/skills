@@ -4,7 +4,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../.."          # lacarta-go/
 RUN="$PWD/web/app/tests/.run"
-rm -rf "$RUN" && mkdir -p "$RUN/claude/projects/x" "$RUN/task" "$RUN/done-task"
+rm -rf "$RUN" && mkdir -p "$RUN/claude/projects/x"
+# The tasks' folders sit outside this repository: a task's config.json goes to its git root.
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/lacarta-seed.XXXXXX")
+mkdir -p "$WORK/done-task" "$WORK/notes/.lacarta"
+git init -q "$WORK/login-fix"
+echo '{"name": "Release notes"}' > "$WORK/notes/.lacarta/config.json"
 export LACARTA_HOME="$RUN/home" CLAUDE_CONFIG_DIR="$RUN/claude" LACARTA_NO_DAEMON=1
 unset LACARTA_PROJECT LACARTA_SESSION LACARTA_AGENT   # from the session running the tests
 go build -o "$RUN/lacarta" ./cmd/lacarta
@@ -17,15 +22,19 @@ cat > "$T" <<'JSONL'
 {"type":"user","message":{"content":"Fix the login bug"},"timestamp":"2026-11-12T01:00:00Z"}
 {"type":"assistant","message":{"content":[{"type":"text","text":"Looking at **auth.py**."},{"type":"tool_use","name":"Bash","input":{"command":"grep -rn login","description":"Search login code"}},{"type":"tool_use","name":"Read","input":{"file_path":"auth.py"}}]},"timestamp":"2026-11-12T01:00:05Z"}
 JSONL
-echo "{\"session_id\":\"s1\",\"cwd\":\"$RUN/task\",\"transcript_path\":\"$T\"}" | CLAUDE_ENV_FILE="$RUN/env1" "$L" hook session-start > /dev/null
+echo "{\"session_id\":\"s1\",\"cwd\":\"$WORK/login-fix\",\"transcript_path\":\"$T\"}" | CLAUDE_ENV_FILE="$RUN/env1" "$L" hook session-start > /dev/null
 echo '{"session_id":"s1","prompt":"Fix the login bug"}' | "$L" hook prompt
 TASK=$(sed -n 's/^export LACARTA_PROJECT=//p' "$RUN/env1")
 "$L" --project "$TASK" ask --title "Which fix?" --option "Patch|Small change, quick to review" --option "Rewrite|Cleaner, takes a day" > /dev/null
 
 # An ended task, which can be archived.
-echo "{\"session_id\":\"s3\",\"cwd\":\"$RUN/done-task\"}" | CLAUDE_ENV_FILE="$RUN/env3" "$L" hook session-start > /dev/null
+echo "{\"session_id\":\"s3\",\"cwd\":\"$WORK/done-task\"}" | CLAUDE_ENV_FILE="$RUN/env3" "$L" hook session-start > /dev/null
 echo '{"session_id":"s3","reason":"exit"}' | "$L" hook session-end
 DONE=$(sed -n 's/^export LACARTA_PROJECT=//p' "$RUN/env3")
+# An ended task that did something: listed under Inactive (the one above is an empty session).
+echo "{\"session_id\":\"s4\",\"cwd\":\"$WORK/notes\"}" | CLAUDE_ENV_FILE="$RUN/env4" "$L" hook session-start > /dev/null
+echo '{"session_id":"s4","prompt":"Write the release notes"}' | "$L" hook prompt
+echo '{"session_id":"s4","reason":"exit"}' | "$L" hook session-end
 
 # A software project with a connected session, a diagram in a spec and a blocking finding.
 "$L" --root "$RUN/shop" init --name "Shop" --summary "An online shop" > /dev/null

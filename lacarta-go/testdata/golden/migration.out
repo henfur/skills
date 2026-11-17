@@ -1,5 +1,5 @@
 $ init --name legacy
-Initialised <W>/.lacarta as project legacy-18fe
+Initialised <W>/.lacarta as project legacy-<ID>
 Spec templates: <W>/.lacarta/specs
 Console: not running; start it with `serve`
 Next: tell the user the console URL, then ask what the project is (unless they already said).

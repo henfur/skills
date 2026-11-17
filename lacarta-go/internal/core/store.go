@@ -102,6 +102,9 @@ func (s *Store) load() (*State, error) {
 	if err := Migrate(st); err != nil {
 		return nil, err
 	}
+	if name := ProjectConfigRead(st).Name; name != "" { // the config file names the project
+		st.Project.Name = name
+	}
 	return st, nil
 }
 

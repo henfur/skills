@@ -121,7 +121,8 @@ func getJSON(t *testing.T, url string) any {
 }
 
 // dropAuditKind removes what was added after the prototype was frozen: the security-audit kind
-// in the catalog, its models in the settings, the plugins, and the config file's metadata.
+// in the catalog, its models in the settings, the plugins, the config file's metadata, and the
+// fields the home page groups projects by.
 func dropAuditKind(hub any) {
 	h := hub.(map[string]any)
 	cat := h["catalog"].(map[string]any)
@@ -130,6 +131,11 @@ func dropAuditKind(hub any) {
 	delete(h["settings"].(map[string]any)["models"].(map[string]any), "audit")
 	delete(h["settings"].(map[string]any), "config")
 	delete(h, "tools")
+	for _, p := range h["projects"].([]any) {
+		for _, k := range []string{"last_seen", "active", "empty"} {
+			delete(p.(map[string]any), k)
+		}
+	}
 	delete(h, "plugins")
 }
 
@@ -167,6 +173,8 @@ func TestAPIParity(t *testing.T) {
 		want, got := getJSON(t, pyURL+path), getJSON(t, goSrv.URL+path)
 		if path == "/api/hub" {
 			dropAuditKind(got)
+		} else {
+			delete(got.(map[string]any), "config") // the project's config.json, which the prototype didn't have
 		}
 		if diffs := compare("", want, got); len(diffs) > 0 {
 			t.Errorf("%s differs from the prototype:\n  %s", path, strings.Join(diffs, "\n  "))

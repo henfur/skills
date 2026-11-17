@@ -156,3 +156,66 @@ func TestConfigFiles(t *testing.T) {
 	contains(t, out, "templates: ")
 	contains(t, must(t, "--root", root, "config"), "Remote control  false (project config)")
 }
+
+func TestProjectNames(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("LACARTA_HOME", home)
+	t.Setenv("LACARTA_NO_DAEMON", "1")
+	t.Setenv("LACARTA_PROJECT", "")
+	t.Setenv("LACARTA_SESSION", "")
+	t.Setenv("LACARTA_AGENT", "")
+	work := t.TempDir()
+
+	// A session in a subfolder of a git repository: the task is named after the repository, and
+	// its config.json is created at the repository's root. The first prompt no longer names it.
+	repo := filepath.Join(work, "webshop")
+	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
+	os.MkdirAll(filepath.Join(repo, "api"), 0o755)
+	pid, s, err := core.RegisterSession("s1", filepath.Join(repo, "api"), "", "startup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(repo, ".lacarta", "config.json"))
+	if err != nil || !strings.Contains(string(b), `"name": "webshop"`) {
+		t.Fatalf("config not created at the repository root: %s %v", b, err)
+	}
+	st, _ := s.Read()
+	if st.Project.Name != "webshop" {
+		t.Errorf("name = %q", st.Project.Name)
+	}
+
+	// The config's name wins, for every task in that folder, and survives edits.
+	writeFile(t, filepath.Join(repo, ".lacarta", "config.json"), `{"name": "Web shop", "models": {"agent": "sonnet"}}`)
+	if st, _ = s.Read(); st.Project.Name != "Web shop" {
+		t.Errorf("config name not applied: %q", st.Project.Name)
+	}
+	_, s2, _ := core.RegisterSession("s2", repo, "", "startup")
+	if st2, _ := s2.Read(); st2.Project.Name != "Web shop" {
+		t.Errorf("second task: %q", st2.Project.Name)
+	}
+	if !strings.Contains(must(t, "--project", pid, "status"), "Web shop") {
+		t.Error("status should show the config's name")
+	}
+
+	// No git repository: the folder's name. The home folder gets no config file (its .lacarta is lacarta's own).
+	plain := filepath.Join(work, "notes")
+	os.MkdirAll(plain, 0o755)
+	_, s3, _ := core.RegisterSession("s3", plain, "", "startup")
+	if st3, _ := s3.Read(); st3.Project.Name != "notes" {
+		t.Errorf("plain folder: %q", st3.Project.Name)
+	}
+	userHome, _ := os.UserHomeDir()
+	if p := core.ProjectConfigPath(core.Single, &core.Store{Root: userHome}); p != "" {
+		t.Errorf("a task in the home folder must not get a config file, got %s", p)
+	}
+
+	// init writes the name into the project's config.json; without --name it takes the one there.
+	shop := filepath.Join(work, "shop")
+	must(t, "--root", shop, "init", "--name", "Shop")
+	if b, _ := os.ReadFile(filepath.Join(shop, ".lacarta", "config.json")); !strings.Contains(string(b), `"name": "Shop"`) {
+		t.Errorf("init should write the name: %s", b)
+	}
+	other := filepath.Join(work, "other")
+	writeFile(t, filepath.Join(other, ".lacarta", "config.json"), `{"name": "Billing"}`)
+	contains(t, must(t, "--root", other, "init"), "project billing-")
+}

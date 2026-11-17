@@ -1,12 +1,15 @@
 package core
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -77,6 +80,8 @@ type ConfigMeta struct {
 // ProjectConfig: what a project's config.json overrides.
 type ProjectConfig struct {
 	ConfigMeta
+	ID            string            `json:"id,omitempty"`     // the project's id in the console, set by lacarta
+	Name          string            `json:"name,omitempty"`   // shown everywhere instead of the state's name
 	Models        map[string]string `json:"models,omitempty"` // role -> alias, for the project's kind
 	RemoteControl *bool             `json:"remote_control,omitempty"`
 	Templates     string            `json:"templates,omitempty"` // absolute, inside the project
@@ -287,11 +292,22 @@ func ToolPath(name string, alts ...string) string {
 // comments included. A legacy settings.json is folded in on the first save, then removed.
 func editHomeConfig(set map[string]any) error {
 	path := HomeConfigPath()
-	raw := map[string]json.RawMessage{}
 	src := path
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		src = legacySettingsPath()
 	}
+	if err := editConfigFile(src, path, set); err != nil {
+		return err
+	}
+	if src != path {
+		_ = os.Remove(src)
+	}
+	return nil
+}
+
+// editConfigFile reads src (if it exists), sets the given keys (nil removes one) and writes dst.
+func editConfigFile(src, dst string, set map[string]any) error {
+	raw := map[string]json.RawMessage{}
 	if b, err := os.ReadFile(src); err == nil {
 		if err := json.Unmarshal(b, &raw); err != nil {
 			return Gate("%s is not valid JSON (%v): fix it by hand first, nothing was saved.", src, err)
@@ -308,16 +324,10 @@ func editHomeConfig(set map[string]any) error {
 		}
 		raw[k] = b
 	}
-	if err := os.MkdirAll(Home(), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	if err := WriteJSON(path, raw); err != nil {
-		return err
-	}
-	if src != path {
-		_ = os.Remove(src)
-	}
-	return nil
+	return WriteJSON(dst, raw)
 }
 
 // modelOverrides: the roles whose model differs from the default or that the file set before.
@@ -393,15 +403,139 @@ func SetAuditor(name string) (*Settings, error) {
 
 // ------------------------------------------------------------------ project config
 
+// LocalRoot is the folder a session is about: its git repository, else the folder itself.
+func LocalRoot(cwd string) string {
+	d, err := filepath.Abs(cwd)
+	if err != nil {
+		return cwd
+	}
+	for x := d; ; {
+		if _, err := os.Stat(filepath.Join(x, ".git")); err == nil {
+			return x
+		}
+		parent := filepath.Dir(x)
+		if parent == x {
+			return d
+		}
+		x = parent
+	}
+}
+
+// DefaultName names a session's project after its git repository, else its folder.
+func DefaultName(cwd string) string {
+	name := filepath.Base(LocalRoot(cwd))
+	if name == "" || name == "/" || name == "." {
+		return "Task"
+	}
+	return name
+}
+
+// ProjectConfigPath: where a project's config.json is. A software project's is in its repository;
+// a single-agent task's in the folder it works in (its git repository's root, else the folder),
+// shared by every task there; an audit's beside its state, never inside the audited code. ""
+// when there is none: a task in the home folder, whose .lacarta is lacarta's own.
+func ProjectConfigPath(template string, s *Store) string {
+	switch template {
+	case Single:
+		if s.Root == "" {
+			return ""
+		}
+		root := LocalRoot(s.Root)
+		home, _ := os.UserHomeDir()
+		dir := filepath.Join(root, StateDir)
+		if root == "/" || root == home || dir == Home() {
+			return ""
+		}
+		return filepath.Join(dir, ConfigFile)
+	default:
+		if s.Dir == "" {
+			return ""
+		}
+		return filepath.Join(s.Dir, ConfigFile)
+	}
+}
+
+func projectConfigPath(st *State) string {
+	return ProjectConfigPath(st.Template, &Store{Root: st.Root, Dir: st.Dir})
+}
+
+// EnsureProjectConfig gives a project's config.json the keys it lacks: its id (which the console
+// and the next sessions in that folder know it by) and its name. It creates the file if needed and
+// never changes a value already there. Best effort: a folder lacarta can't write to has no file.
+func EnsureProjectConfig(st *State, name, id string) {
+	ensureConfigKeys(projectConfigPath(st), map[string]string{"name": name, "id": id})
+}
+
+func ensureConfigKeys(path string, kv map[string]string) {
+	if path == "" {
+		return
+	}
+	raw, exists, warns := readConfig(path)
+	if exists && raw == nil && len(warns) > 0 {
+		return // unreadable or not JSON: leave the user's file alone
+	}
+	set := map[string]any{}
+	for k, v := range kv {
+		if _, ok := raw[k]; !ok && v != "" {
+			set[k] = v
+		}
+	}
+	if len(set) > 0 {
+		_ = editConfigFile(path, path, set)
+	}
+}
+
+// Project ids: lowercase letters, digits and dashes, as in the console's URLs.
+var projectIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{2,62}$`)
+
+// NewProjectID: a random id with a readable prefix ("t" for a task, the slug of a project's name).
+func NewProjectID(prefix string) string {
+	b := make([]byte, 3)
+	_, _ = rand.Read(b)
+	return prefix + "-" + hex.EncodeToString(b)
+}
+
+// configID reads the project id a config file holds, "" if none or invalid.
+func configID(path string) string {
+	if path == "" {
+		return ""
+	}
+	raw, _, _ := readConfig(path)
+	var id string
+	if json.Unmarshal(raw["id"], &id) != nil || !projectIDPattern.MatchString(id) {
+		return ""
+	}
+	return id
+}
+
+// setConfigID replaces the id in a config file: a copied folder gets its own.
+func setConfigID(path, id string) {
+	if path != "" {
+		_ = editConfigFile(path, path, map[string]any{"id": id})
+	}
+}
+
+// ProjectConfigSetName writes the project's name into its config.json.
+func ProjectConfigSetName(st *State, name string) error {
+	path := projectConfigPath(st)
+	if path == "" {
+		return Gate("This project has no folder for a config file.")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" || len([]rune(name)) > 120 {
+		return Gate("A name has 1 to 120 characters.")
+	}
+	return editConfigFile(path, path, map[string]any{"name": name})
+}
+
 // ProjectConfigRead reads a project's config.json. Tool paths and the auditor are refused there:
 // a software project's config is in its repository, and a cloned repository must not choose
 // which programs lacarta runs or who signs.
 func ProjectConfigRead(st *State) *ProjectConfig {
-	pc := &ProjectConfig{}
-	if st.Dir == "" {
+	pc := &ProjectConfig{ConfigMeta: ConfigMeta{Path: projectConfigPath(st)}}
+	if pc.Path == "" {
 		return pc
 	}
-	pc.Path = filepath.Join(st.Dir, ConfigFile)
 	raw, exists, warns := readConfig(pc.Path)
 	pc.Exists, pc.Warnings = exists, append([]string{}, warns...)
 	warn := func(format string, a ...any) { pc.Warnings = append(pc.Warnings, fmt.Sprintf(format, a...)) }
@@ -409,6 +543,20 @@ func ProjectConfigRead(st *State) *ProjectConfig {
 	for _, key := range sortedKeys(raw) {
 		v := raw[key]
 		switch key {
+		case "id":
+			var id string
+			if json.Unmarshal(v, &id) != nil || !projectIDPattern.MatchString(id) {
+				warn("id: expected lowercase letters, digits and dashes (3 to 63). It is set by lacarta: keep it as it is.")
+				continue
+			}
+			pc.ID = id
+		case "name":
+			var name string
+			if json.Unmarshal(v, &name) != nil || strings.TrimSpace(name) == "" || len([]rune(name)) > 120 {
+				warn("name: expected a name of at most 120 characters.")
+				continue
+			}
+			pc.Name = strings.TrimSpace(name)
 		case "models":
 			var models map[string]string
 			if json.Unmarshal(v, &models) != nil {
@@ -473,7 +621,7 @@ func ProjectConfigRead(st *State) *ProjectConfig {
 		case "tools", "auditor":
 			warn("%s: can only be set in %s, not in a project.", key, HomeConfigPath())
 		default:
-			warn("unknown setting %q. A project can set: models, remote_control, templates, plugins.", key)
+			warn("unknown setting %q. A project can set: id, name, models, remote_control, templates, plugins.", key)
 		}
 	}
 	return pc
@@ -481,20 +629,14 @@ func ProjectConfigRead(st *State) *ProjectConfig {
 
 // ProjectConfigSetModels writes role models into the project's config.json (alias "" removes one).
 func ProjectConfigSetModels(st *State, roles map[string]string) error {
-	if st.Dir == "" {
+	path := projectConfigPath(st)
+	if path == "" {
 		return Gate("This project has no folder for a config file.")
 	}
 	kind := KindByID(st.Template)
-	path := filepath.Join(st.Dir, ConfigFile)
-	raw := map[string]json.RawMessage{}
-	if b, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(b, &raw); err != nil {
-			return Gate("%s is not valid JSON (%v): fix it by hand first, nothing was saved.", path, err)
-		}
-	}
 	models := map[string]string{}
-	if v, ok := raw["models"]; ok {
-		_ = json.Unmarshal(v, &models)
+	if raw, _, _ := readConfig(path); raw["models"] != nil {
+		_ = json.Unmarshal(raw["models"], &models)
 	}
 	for r, m := range roles {
 		if _, ok := kind.Role(r); !ok {
@@ -509,13 +651,11 @@ func ProjectConfigSetModels(st *State, roles map[string]string) error {
 		}
 		models[r] = m
 	}
+	var v any = models
 	if len(models) == 0 {
-		delete(raw, "models")
-	} else {
-		b, _ := json.Marshal(models)
-		raw["models"] = b
+		v = nil
 	}
-	return WriteJSON(path, raw)
+	return editConfigFile(path, path, map[string]any{"models": v})
 }
 
 // RoleModel: the model a role gets in a project, and which layer chose it.

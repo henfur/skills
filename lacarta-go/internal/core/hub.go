@@ -1,8 +1,6 @@
 package core
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -110,22 +108,51 @@ func Slug(text string) string {
 // RegisterSoftware adds a software project to the hub (idempotent) and returns its id.
 func RegisterSoftware(root, name string) (string, error) {
 	root, _ = filepath.Abs(root)
+	cfg := filepath.Join(root, StateDir, ConfigFile)
+	id := configID(cfg)
 	var pid string
+	copied := false
 	err := HubEdit(func(h *Hub) error {
+		if id != "" {
+			if p, ok := h.Projects.Get(id); ok && p.Template == Software {
+				switch {
+				case p.Root == root:
+				case configID(filepath.Join(p.Root, StateDir, ConfigFile)) == id:
+					copied = true // a copy of a registered project: it gets its own id below
+				default:
+					p.Root = root // the project moved: follow it
+				}
+				if !copied {
+					p.Name, pid = name, id
+					return nil
+				}
+			} else if !ok {
+				pid = id // the console forgot it (or a new machine): keep the project's id
+				h.Projects.Set(pid, &HubProject{ID: pid, Template: Software, Name: name, Root: root, CreatedAt: Now()})
+				return nil
+			}
+		}
 		for _, k := range h.Projects.Keys() {
 			p, _ := h.Projects.Get(k)
-			if p.Root == root {
+			if p.Root == root && !copied {
 				p.Name = name
 				pid = k
 				return nil
 			}
 		}
-		sum := sha256.Sum256([]byte(root))
-		pid = Slug(name) + "-" + hex.EncodeToString(sum[:])[:4]
+		pid = NewProjectID(Slug(name))
 		h.Projects.Set(pid, &HubProject{ID: pid, Template: Software, Name: name, Root: root, CreatedAt: Now()})
 		return nil
 	})
-	return pid, err
+	if err != nil {
+		return "", err
+	}
+	if copied {
+		setConfigID(cfg, pid)
+	} else if _, err := os.Stat(filepath.Join(root, StateDir)); err == nil {
+		ensureConfigKeys(cfg, map[string]string{"id": pid, "name": name})
+	}
+	return pid, nil
 }
 
 // IsRegistered reports whether a software project root is already in the hub.

@@ -14,8 +14,9 @@
   import Report from "./Report.svelte";
   import Plugins from "./Plugins.svelte";
   import Icon from "../components/Icon.svelte";
-  import { app, L } from "../lib/state.svelte.js";
-  import { UNRESOLVED } from "../lib/format.js";
+  import Badge from "../components/Badge.svelte";
+  import { app, L, kindOf } from "../lib/state.svelte.js";
+  import { UNRESOLVED, label } from "../lib/format.js";
 
   // Every kind of project has its own views.
   const VIEWS = {
@@ -45,6 +46,12 @@
   const View = $derived(current[2]);
 </script>
 
+<div class="phead">
+  <span class="phead-name">{st.project.name}</span>
+  <span class="small muted">{kindOf(st.template).label}</span>
+  {#if d.blocked}<Badge s="stopped" text="Blocked" />
+  {:else if st.template !== "single"}<Badge s={st.stage} text={label(st.stage)} />{/if}
+</div>
 <nav class="ptabs" aria-label={st.project.name}>
   {#each views as [k, name] (k)}
     {@const c = counts[k]}
@@ -59,9 +66,9 @@
 <View {st} {d} />
 {#if app.data.config}
   {@const cfg = app.data.config}
-  {#if current[0] === "overview" && (cfg.models || cfg.plugins || cfg.templates || cfg.remote_control != null)}
+  {#if current[0] === "overview" && (cfg.name || cfg.models || cfg.plugins || cfg.templates || cfg.remote_control != null)}
     <p class="small muted config-note">This project's <code>{cfg.path}</code> sets
-      {[cfg.models && `the models of ${Object.keys(cfg.models).map(r => (app.hub.catalog.kinds[st.template]?.roles[r]?.label || r).toLowerCase()).join(", ")}`,
+      {[cfg.name && "its name", cfg.models && `the models of ${Object.keys(cfg.models).map(r => (app.hub.catalog.kinds[st.template]?.roles[r]?.label || r).toLowerCase()).join(", ")}`,
         cfg.templates && "the spec templates", cfg.plugins && "plugins", cfg.remote_control != null && "remote control"].filter(Boolean).join(", ")}, over the machine's Settings.</p>
   {/if}
 {/if}

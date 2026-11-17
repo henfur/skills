@@ -1,13 +1,12 @@
 <script>
   import Nav from "./components/Nav.svelte";
   import Toasts from "./components/Toasts.svelte";
-  import Badge from "./components/Badge.svelte";
+  import logo from "./assets/logo.png";
   import Home from "./views/Home.svelte";
   import Settings from "./views/Settings.svelte";
   import Project from "./views/Project.svelte";
-  import { app, ui, kindOf } from "./lib/state.svelte.js";
+  import { app, ui } from "./lib/state.svelte.js";
   import { themeName } from "./lib/diagrams.js";
-  import { label } from "./lib/format.js";
 
   const r = $derived(app.route);
   const open = $derived(r.page === "project" && app.data && app.data.id === r.pid ? app.data : null);
@@ -36,25 +35,21 @@
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { ui.theme = themeName(); });
 </script>
 
-<header class="appbar">
-  <a class="name" href="#/"><b>Lacarta</b>{#if open} · {open.state.project.name}{/if}</a>
-  <span>
-    {#if open}
-      {#if open.derived.blocked}<Badge s="stopped" text="Blocked" />
-      {:else if open.state.template === "single"}<Badge s="draft" text={kindOf("single").label} />
-      {:else}<Badge s={open.state.stage} text={label(open.state.stage)} />{/if}
-    {/if}
-  </span>
-  <span class="spacer"></span>
-  <span class="live" class:off={app.live.ok === false} role="status">
-    {#if app.live.ok === null}Connecting…{:else if app.live.ok}<span class="long">Live · </span>updated {app.live.at.toLocaleTimeString()}{:else}Disconnected: is `lacarta serve` running?{/if}
-  </span>
-  {#if canAsk}<button class="btn sm" type="button" onclick={askPermission}>Enable alerts</button>{/if}
-  <button class="btn sm" type="button" aria-label="Switch theme" onclick={toggleTheme}>Theme</button>
-</header>
 <Toasts />
 <div class="layout">
-  {#if app.hub}<Nav />{:else}<nav class="side" aria-label="Projects"></nav>{/if}
+  <aside class="sidebar">
+    <a class="side-brand" href="#/" aria-label="Lacarta: all projects"><img class="logo" src={logo} alt="" width="36" height="36" /><span>La<b>carta</b></span></a>
+    {#if app.hub}<Nav />{:else}<nav class="side" aria-label="Projects"></nav>{/if}
+    <div class="side-foot">
+      <span class="live" class:off={app.live.ok === false} role="status">
+        {#if app.live.ok === null}Connecting…{:else if app.live.ok}<span class="long">Live · </span>updated {app.live.at.toLocaleTimeString()}{:else}Disconnected: is `lacarta serve` running?{/if}
+      </span>
+      <span class="row">
+        {#if canAsk}<button class="btn sm ghost" type="button" onclick={askPermission}>Enable alerts</button>{/if}
+        <button class="btn sm ghost" type="button" aria-label="Switch theme" onclick={toggleTheme}>Theme</button>
+      </span>
+    </div>
+  </aside>
   <main><div class="content">
     {#if !app.hub}
       <p class="muted">Loading…</p>

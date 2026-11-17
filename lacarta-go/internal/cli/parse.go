@@ -101,7 +101,7 @@ func (errHelp) Error() string { return "help" }
 func parse(cmds []*Cmd, argv []string) (*Args, error) {
 	a := &Args{strs: map[string]string{}, flags: map[string]bool{}, lists: map[string][]string{}, pos: map[string][]string{}}
 	i := 0
-	// Global options come before the command.
+	// Global options come before the command (or after it, when the command has no option of that name).
 	for i < len(argv) && strings.HasPrefix(argv[i], "-") {
 		name, val, hasVal := strings.Cut(strings.TrimLeft(argv[i], "-"), "=")
 		if name == "h" || name == "help" {
@@ -173,6 +173,25 @@ func parse(cmds []*Cmd, argv []string) (*Args, error) {
 		if strings.HasPrefix(tok, "--") && len(tok) > 2 {
 			name, val, hasVal := strings.Cut(tok[2:], "=")
 			idx := slices.IndexFunc(cmd.Opts, func(o Opt) bool { return o.Name == name })
+			if idx < 0 && slices.ContainsFunc(globalOpts, func(o Opt) bool { return o.Name == name }) {
+				// A global option after the command (`listen --project t-1`): agents write it there.
+				if !hasVal {
+					i++
+					if i >= len(argv) {
+						return nil, &UsageError{fmt.Sprintf("argument --%s: expected one argument", name)}
+					}
+					val = argv[i]
+				}
+				switch name {
+				case "root":
+					a.Root = val
+				case "project":
+					a.Project = val
+				case "agent":
+					a.Agent = val
+				}
+				continue
+			}
 			if idx < 0 {
 				return nil, &UsageError{fmt.Sprintf("unrecognized arguments: %s", tok)}
 			}

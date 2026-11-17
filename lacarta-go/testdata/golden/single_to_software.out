@@ -3,14 +3,14 @@ Q-1
 [exit 0]
 
 $ --root app init --name "App"
-Initialised <W>/app/.lacarta as project app-3704
+Initialised <W>/app/.lacarta as project app-<ID>
 Spec templates: <W>/app/.lacarta/specs
 Console: not running; start it with `serve`
 Next: tell the user the console URL, then ask what the project is (unless they already said).
 [exit 0]
 
 $ --project $LACARTA_PROJECT status
-app: single-agent task in <W>/app, ended
+App: single-agent task in <W>/app, ended
 Remote control: on; console messages waiting: 0
 
 Next: The session ended.

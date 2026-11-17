@@ -187,6 +187,8 @@ func envList(env map[string]string) []string {
 var (
 	reTime = regexp.MustCompile(`\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ`)
 	reTask = regexp.MustCompile(`\bt-[0-9a-f]{6}\b`)
+	// Project ids end in a random part: <slug>-<6 hex> (older recordings: 4 hex from the folder).
+	reProject = regexp.MustCompile(`\b([a-z][a-z0-9]*(?:-[a-z0-9]+)*?)-[0-9a-f]{6}\b`)
 )
 
 func normalize(s, work string, cli []string) string {
@@ -194,7 +196,8 @@ func normalize(s, work string, cli []string) string {
 	s = strings.ReplaceAll(s, strings.Join(pythonCLI(), " "), "<L>")
 	s = strings.ReplaceAll(s, work, "<W>")
 	s = reTime.ReplaceAllString(s, "<TS>")
-	return reTask.ReplaceAllString(s, "<TASK>")
+	s = reTask.ReplaceAllString(s, "<TASK>")
+	return reProject.ReplaceAllString(s, "$1-<ID>")
 }
 
 // split is a small shell-words splitter: quotes and backslashes, no expansion.

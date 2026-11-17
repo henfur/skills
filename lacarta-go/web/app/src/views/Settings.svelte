@@ -36,7 +36,7 @@
 <section class="card">
   <div class="row"><code>{cfg.path}</code><span class="small muted">{cfg.exists ? "" : "not created yet: saving anything on this page creates it"}</span></div>
   <p class="small muted" style="margin:6px 0 0">This page saves into it; other settings are set by editing it: spec templates, plugins on by default and tool paths. <code>lacarta config</code> shows what is in effect and <code>lacarta config check</code> what is ignored.
-    A project's own <code>.lacarta/config.json</code> can override models, remote control, spec templates and plugins. Tool paths and the auditor are set only here: a project's file can be in a repository you cloned.</p>
+    A project's own <code>.lacarta/config.json</code> names it and can override models, remote control, spec templates and plugins. Tool paths and the auditor are set only here: a project's file can be in a repository you cloned.</p>
   {#if cfg.warnings.length}<div class="banner warn" style="margin:8px 0 0"><Icon name="warn" /><div><strong>Ignored in this file</strong>
     <ul class="small" style="margin:4px 0 0">{#each cfg.warnings as w, i (i)}<li>{w}</li>{/each}</ul></div></div>{/if}
   <div class="list" style="margin-top:8px">

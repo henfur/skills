@@ -125,6 +125,26 @@ type projectSummary struct {
 	Blocked        *string           `json:"blocked"`
 	UpdatedAt      string            `json:"updated_at,omitempty"`
 	MovedTo        *string           `json:"moved_to"`
+	LastSeen       string            `json:"last_seen,omitempty"` // latest of the activity and the session's transcript
+	Active         bool              `json:"active"`              // listed with the active projects (see activeProject)
+	Empty          bool              `json:"empty"`               // a task whose session never got a first prompt
+}
+
+// IdleAfter: a session that hasn't written to its transcript for this long is no longer
+// counted as active, even if its CLI never reported its end.
+var IdleAfter = 12 * time.Hour
+
+// activeProject: what the console lists as active. A software project or an audit until it is
+// done or stopped; a task while its session is in use; anything waiting for the user.
+func activeProject(out *projectSummary, st *core.State) bool {
+	if len(out.Questions) > 0 || out.Attention != nil || out.Listening {
+		return true
+	}
+	if st.Template != core.Single {
+		return st.Stage != "done" && st.Stage != "stopped"
+	}
+	seen, err := time.Parse(time.RFC3339, out.LastSeen)
+	return out.Session && err == nil && core.Clock().Sub(seen) < IdleAfter
 }
 
 // summary is what the home page and the notifications need, cheap enough for every project.
@@ -180,6 +200,16 @@ func summary(pid string, e *core.HubProject) projectSummary {
 	if st.MovedTo != "" {
 		out.MovedTo = &st.MovedTo
 	}
+	out.LastSeen = out.UpdatedAt
+	if out.Session {
+		if fi, err := os.Stat(a.Session.Transcript); err == nil {
+			if t := fi.ModTime().UTC().Format("2006-01-02T15:04:05Z"); t > out.LastSeen {
+				out.LastSeen = t
+			}
+		}
+	}
+	out.Active = activeProject(&out, st)
+	out.Empty = st.Template == core.Single && !st.Project.Named && !st.Project.Prompted && len(st.Questions) == 0 && len(st.Inbox) == 0
 	return out
 }
 

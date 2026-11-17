@@ -3,9 +3,11 @@ package hooks
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -408,5 +410,129 @@ func TestInstall(t *testing.T) {
 	}
 	if _, err := os.Stat(path + ".bak"); err != nil {
 		t.Fatal("a backup must be kept")
+	}
+}
+
+// ---------------------------------------------------------------- security audits
+
+// A single-agent session asked for an audit is told to start it through lacarta, so the console
+// shows a security audit and not a single-agent task.
+func TestPromptAskingForAnAuditPointsToAuditInit(t *testing.T) {
+	setup(t, false)
+	for _, ask := range []string{"I want to start a security audit", "can you pentest this API?",
+		"Audit this repository for vulnerabilities", "run a vulnerability assessment"} {
+		out := runHook("prompt", `{"session_id":"s-1","prompt":`+strconv.Quote(ask)+`}`)
+		if !strings.Contains(out, "UserPromptSubmit") || !strings.Contains(out, "audit init --target") {
+			t.Errorf("%q: no audit hint, got %q", ask, out)
+		}
+	}
+	for _, other := range []string{"Fix the login bug", "add an audit log table to the schema"} {
+		if out := runHook("prompt", `{"session_id":"s-1","prompt":`+strconv.Quote(other)+`}`); out != "" {
+			t.Errorf("%q: unexpected output %q", other, out)
+		}
+	}
+}
+
+// ---------------------------------------------------------------- one project per folder
+
+func startIn(t *testing.T, sid, cwd, source string) string {
+	t.Helper()
+	runHook("session-start", fmt.Sprintf(`{"session_id":%q,"cwd":%q,"source":%q}`, sid, cwd, source))
+	h, err := core.HubRead()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := h.Sessions.Get(sid)
+	return pid
+}
+
+func configIDOf(t *testing.T, dir string) string {
+	t.Helper()
+	var c struct{ ID string }
+	b, _ := os.ReadFile(filepath.Join(dir, ".lacarta", "config.json"))
+	_ = json.Unmarshal(b, &c)
+	return c.ID
+}
+
+func TestAFolderKeepsItsProject(t *testing.T) {
+	setup(t, false)
+	work := t.TempDir()
+	repo := filepath.Join(work, "shop")
+	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
+	os.MkdirAll(filepath.Join(repo, "api"), 0o755)
+
+	first := startIn(t, "a1", repo, "startup")
+	if configIDOf(t, repo) != first {
+		t.Fatalf("the folder's config should hold the task's id %s, has %q", first, configIDOf(t, repo))
+	}
+	runHook("session-end", `{"session_id":"a1","reason":"exit"}`)
+	if again := startIn(t, "a2", filepath.Join(repo, "api"), "startup"); again != first {
+		t.Errorf("a new session in the same repository should continue %s, got %s", first, again)
+	}
+
+	// A second session while the first is live is its own task; the folder keeps its id.
+	other := startIn(t, "a3", repo, "startup")
+	if other == first || configIDOf(t, repo) != first {
+		t.Errorf("concurrent session: got %s, config %s", other, configIDOf(t, repo))
+	}
+	// A resumed conversation rejoins even though a2 looks live; then a2's end doesn't end it.
+	if r := startIn(t, "a4", repo, "resume"); r != first {
+		t.Errorf("resume should rejoin %s, got %s", first, r)
+	}
+	runHook("session-end", `{"session_id":"a2","reason":"exit"}`)
+	s, _ := core.ProjectStore(first)
+	if st, _ := s.Read(); st.Stage != "active" {
+		t.Errorf("an earlier session's end ended the task: %s", st.Stage)
+	}
+	runHook("session-end", `{"session_id":"a4","reason":"exit"}`)
+
+	// Archived, it comes back with the next session.
+	if err := core.HubEdit(func(h *core.Hub) error { p, _ := h.Projects.Get(first); p.Archived = true; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	startIn(t, "a5", repo, "startup")
+	h, _ := core.HubRead()
+	if p, _ := h.Projects.Get(first); p.Archived {
+		t.Error("the task should be restored")
+	}
+	runHook("session-end", `{"session_id":"a5","reason":"exit"}`)
+
+	// A copy of the folder gets its own id; the original keeps its own.
+	cp := filepath.Join(work, "shop-copy")
+	if err := os.CopyFS(cp, os.DirFS(repo)); err != nil {
+		t.Fatal(err)
+	}
+	copyID := startIn(t, "a6", cp, "startup")
+	if copyID == first || configIDOf(t, cp) != copyID || configIDOf(t, repo) != first {
+		t.Errorf("copy: task %s, copy's config %s, original's %s", copyID, configIDOf(t, cp), configIDOf(t, repo))
+	}
+
+	// Moved, the folder is followed.
+	moved := filepath.Join(work, "shop-moved")
+	if err := os.Rename(repo, moved); err != nil {
+		t.Fatal(err)
+	}
+	if m := startIn(t, "a7", moved, "startup"); m != first {
+		t.Errorf("a moved folder should keep its task %s, got %s", first, m)
+	}
+	h, _ = core.HubRead()
+	if p, _ := h.Projects.Get(first); p.Cwd != moved {
+		t.Errorf("the console should follow the folder: %s", p.Cwd)
+	}
+
+	// Software projects: init writes the id; a copy gets its own.
+	proj := filepath.Join(work, "proj")
+	os.MkdirAll(filepath.Join(proj, ".lacarta"), 0o755)
+	os.WriteFile(filepath.Join(proj, ".lacarta", "state.json"), []byte(`{"version":1,"template":"software","project":{"name":"Proj"}}`), 0o644)
+	pid := startIn(t, "b1", proj, "startup")
+	if configIDOf(t, proj) != pid {
+		t.Errorf("software config id %q, project %s", configIDOf(t, proj), pid)
+	}
+	pcp := filepath.Join(work, "proj-copy")
+	if err := os.CopyFS(pcp, os.DirFS(proj)); err != nil {
+		t.Fatal(err)
+	}
+	if c := startIn(t, "b2", pcp, "startup"); c == pid || configIDOf(t, pcp) != c {
+		t.Errorf("software copy: %s, config %s", c, configIDOf(t, pcp))
 	}
 }

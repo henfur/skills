@@ -125,5 +125,6 @@ export const ui = $state({
   chatDraft: "",
   chatError: "",
   showArchived: false,
+  showEmpty: false,
   theme: "",             // bumps diagram renders when the theme changes
 });
