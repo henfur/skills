@@ -15,6 +15,7 @@ import (
 
 	"lacarta/internal/core"
 	"lacarta/internal/desk"
+	"lacarta/internal/plugins"
 )
 
 // PollEvery is how often `lacarta listen` looks for news.
@@ -173,6 +174,9 @@ func sessionContext(pid string, s *core.Store) (string, error) {
 			"structured, reviewed process, load the `lacarta` skill. %s When you need a decision while the user may be away "+
 			"from the terminal, ask in the console: `%s ask --title \"...\" --option \"Label|what it means\"`, then run "+
 			"`%s wait` as a background command.", auditHint(), Self, Self))
+	}
+	if s := plugins.Instruction(plugins.ForSession(st)); s != "" {
+		lines = append(lines, s)
 	}
 	if core.RemoteOn(st) {
 		lines = append(lines, fmt.Sprintf("Remote control is on: at your first turn, start `%s listen` as a background "+

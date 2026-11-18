@@ -119,9 +119,6 @@ export const ui = $state({
   specTab: "functional",
   findingFilter: "unresolved",
   auditTab: "confirmed",
-  modelDraft: {},        // "kind.role" -> alias
-  modelError: "",
-  settingsNote: "",
   chatDraft: "",
   chatError: "",
   showArchived: false,

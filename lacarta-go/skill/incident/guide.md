@@ -39,7 +39,8 @@ waits for their click in the console.
    or an observation; `--ref` points to what stays elsewhere (a SIEM query, a ticket, a disk image).
 3. **Open one investigation per question.** `investigation open --title "How did they get in?" --hypothesis ...`.
    Give each to an investigator subagent: `lacarta agent start --role investigator --task ...`, then
-   `investigation brief INV-n --for <its id>` prints its whole prompt. Investigations run in parallel.
+   `investigation brief INV-n --for <its id>` prints its whole prompt, with the skills the lead's config gives its role.
+   Investigations run in parallel.
    Notes go in with `investigation note`; the answer with `investigation conclude --status
    confirmed|refuted|inconclusive|parked`. Confirmed and refuted need evidence.
 4. **Challenge what is confirmed.** Give each confirmed conclusion to a fresh challenger

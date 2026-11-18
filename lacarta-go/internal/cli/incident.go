@@ -10,6 +10,7 @@ import (
 
 	"lacarta/internal/core"
 	"lacarta/internal/incident"
+	"lacarta/internal/plugins"
 	"lacarta/internal/server"
 	"lacarta/skill"
 )
@@ -498,6 +499,9 @@ func cmdInvBrief(a *Args) error {
 		}
 	}
 	a.Printf("%s", incident.Brief(self(), st, v, role, a.Str("for")))
+	if s := plugins.Instruction(plugins.ForRole(st, role)); s != "" {
+		a.Printf("\n## Skills\n\n%s\n", s)
+	}
 	return nil
 }
 

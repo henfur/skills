@@ -289,7 +289,10 @@ textarea::placeholder { color: var(--text-muted); }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 .asker { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .asker .who { font-weight: 700; }
-.model-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 16px; align-items: center; }
+.model-row { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 16px; align-items: center; }
+.model-row .model { text-align: right; }
+.model-row .model code { white-space: nowrap; }
+.config-sample { margin: 0 0 12px; padding: 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-sunken); overflow-x: auto; }
 select {
   height: 36px; padding: 0 32px 0 12px; border-radius: var(--radius-md); border: 1px solid var(--border);
   background: var(--surface-raised); color: var(--text); font: 600 15px/22px var(--sans); width: 100%;
@@ -299,7 +302,7 @@ select {
 }
 select:hover { border-color: var(--border-strong); }
 @media (pointer: coarse) { select { height: 44px; } }
-@media (max-width: 600px) { .model-row { grid-template-columns: 1fr; gap: 8px; } }
+@media (max-width: 600px) { .model-row { grid-template-columns: 1fr; gap: 8px; } .model-row .model { text-align: left; } }
 label.field { display: block; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
 
 .q { padding: 0; overflow: hidden; }

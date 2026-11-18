@@ -109,6 +109,13 @@ console, situation reports along the way and a final report that closes the case
 `lacarta incident …`. The design doc lists the gates, four decisions taken without asking and what is left. Go tests
 and the 18 Playwright tests pass; the golden recordings did not move. **The binary in `~/.local/bin` is not rebuilt.**
 
+## Skills per role, config files as the only source (done)
+
+- `skills` in both config files gives each role its skills, beside `models`: `all`, per kind, per role; a project's file adds its own and `-name` drops one. Code: `internal/core/skills.go` (parsing, layering), `internal/plugins/agentskills.go` (finding them, the paragraph for prompts). README: "Skills per role".
+- The console no longer changes models or plugins: Settings shows each role's model and skills, the audit's Plugins tab is read-only, `POST /api/settings` refuses `models`, `skills` and `plugins`, and `plugin enable|disable` are gone. The state's `plugins.<id>.enabled` is ignored; only the pinned `ref` is used.
+- Left as it is: `models` still prints "(console Settings page)" in its header, because the golden recordings pin that line. Change it together with the recordings.
+- Not done: a desk profile's own `skills` are still folders inside the desk (`desk.profiles.<name>.skills`), separate from the role lists; a project view of the effective skills in the console (`lacarta skills` shows them).
+
 ## Later improvements: report provenance
 
 Both are parked by the user for later. They build on the security-audit design's §4.8 (AI-assistance disclosure and provenance);

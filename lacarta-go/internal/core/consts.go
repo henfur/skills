@@ -112,7 +112,7 @@ var SoftwareRoles = []Role{
 }
 
 // Kinds of project. Each has its own console view and its own roles; the models for every
-// role are set once, machine-wide, on the console's Settings page.
+// role, and its skills, are set in the config files (core/config.go, core/skills.go).
 type Kind struct {
 	ID, Label, About string
 	Roles            []Role

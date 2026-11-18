@@ -101,6 +101,11 @@ everywhere. Tasks are no longer named after their first prompt. A session in the
 ```json
 {
   "models": {"software": {"implementation": "sonnet"}, "audit": {"hunter": "opus"}},
+  "skills": {
+    "all": ["house-style"],
+    "software": {"all": ["go-conventions"], "security_review": ["threat-modeling", "sec-tools:scan"]},
+    "incident": {"investigator": ["log-analysis"]}
+  },
   "remote_control": true,
   "auditor": "Ada Lovelace",
   "templates": "~/lacarta-templates",
@@ -113,18 +118,39 @@ everywhere. Tasks are no longer named after their first prompt. A session in the
 | --- | --- | --- | --- |
 | `id` | refused | set by lacarta | The project's id in the console. |
 | `name` | refused | the project's name | Shown everywhere instead of the name in the state. |
-| `models` | `{kind: {role: model}}` | `{role: model}` | Read before every spawn. `models --set role=model [--project]` writes them; the console's Settings page writes the home ones. |
+| `models` | `{kind: {role: model}}` | `{role: model}` | Read before every spawn. The file is the only place they are set: the console shows them. `models --set role=model [--project]` writes the file from a terminal. |
+| `skills` | `{"all": [...], kind: {"all": [...], role: [...]}}` | `{"all": [...], role: [...]}` | The skills each role loads, see below. Set in the files only; `lacarta skills` shows the result. |
 | `remote_control` | default for every session | default for this project | The Chat toggle of a project still wins. |
 | `templates` | a folder | a folder inside the project | Spec templates `init` copies (`functional.md`, `architecture.md`, `stack.md`, `security.md`); a missing file falls back to the next layer, then the built-in one. |
 | `desk` | refused | a review desk's settings | Forge, targets, filters, profiles and their modes, policy, schedule (see the desk design). |
-| `plugins` | on/off in new projects | on/off, locked in the console | The project's Plugins tab can't change a plugin its file sets. Required plugins stay on. |
+| `plugins` | on/off in every project | on/off in this one | lacarta's own plugins (an audit's checks and companions). Set in the files only: the console's Plugins tab shows them, and `plugin enable|disable` are gone. Required plugins stay on. |
 | `tools` | program paths | refused | `git`, `node`, `bwrap`, `prlimit`, `gitleaks`, `osv-scanner`, `chromium`, `glab`; anything unset is found on `PATH`. |
 | `auditor` | the name on signed audit reports | refused | |
 
 A software project's file lives in its repository, so a cloned repository could ship one: it can't choose which programs
 lacarta runs or who signs, and its templates folder must stay inside the project. An invalid value is skipped with a
-warning (shown by `config check` and in the console) rather than stopping a session. The console's saves keep every key
-they don't change. A `~/.lacarta/settings.json` from before is read until the first save, which moves it into `config.json`.
+warning (shown by `config check` and in the console) rather than stopping a session. The console saves only the
+remote-control default and the auditor's name, and keeps every key it doesn't change. A `~/.lacarta/settings.json` from before is read until the first save, which moves it into `config.json`.
+
+### Skills per role
+
+`skills` gives agents the skills they load, the same way `models` gives them a model: per kind of project and role, with
+`all` for everyone. Lists add up, widest first: `skills.all` (every agent of every kind), the kind's `all`, the role's
+list, then the project's `all` and the project's list for the role. An entry `"-name"` drops a skill a wider list added
+(`"single": {"agent": ["-house-style"]}`).
+
+An entry is a name, never a path:
+
+- a skill the agent CLI knows (`~/.claude/skills`, `~/.agents/skills`, the project's `.claude/skills`): loaded with its Skill tool;
+- `plugin:skill`, a skill of one of the agent CLI's plugins: loaded the same way; lacarta can't check it is installed;
+- the id of a lacarta plugin (`lacarta plugin add <folder or git URL> --trust`): the agent is given its folder to read.
+  If its files changed since you trusted it, it is no longer handed out until you add it again.
+
+lacarta hands the skills over in three places: the session's own at its start (the first role of the kind), each
+subagent's in the output of `agent start` (a paragraph for its prompt), and in the briefs lacarta writes (`audit brief`,
+`desk brief`, `incident investigation brief`). The paragraph says lacarta's rules for the role win over a skill.
+A name lacarta doesn't find is still passed on (the agent CLI may know skills lacarta can't see) and listed by
+`config check` under "To check".
 
 ## Console
 

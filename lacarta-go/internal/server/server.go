@@ -525,6 +525,7 @@ func (con *Console) get(w http.ResponseWriter, r *http.Request) {
 		if all, err := plugins.List(); err == nil {
 			out["plugins"] = all
 		}
+		out["skills"] = plugins.KindSkills()
 		send(w, 200, out)
 		return
 	}
@@ -576,23 +577,11 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 		return s
 	}
 	if r.URL.Path == "/api/settings" {
-		models := map[string]map[string]string{}
-		if raw, ok := body["models"]; ok && raw != nil {
-			m, ok := raw.(map[string]any)
-			if !ok {
-				fail(w, 400, "Malformed request.")
+		// Models, skills and plugins are read from the config files: the console shows them only.
+		for _, k := range []string{"models", "skills", "plugins"} {
+			if _, ok := body[k]; ok {
+				gateOr500(w, core.Gate("The %s are set in %s, not from the console.", k, core.HomeConfigPath()))
 				return
-			}
-			for k, v := range m {
-				roles, ok := v.(map[string]any)
-				if !ok {
-					fail(w, 400, "Malformed request.")
-					return
-				}
-				models[k] = map[string]string{}
-				for role, alias := range roles {
-					models[k][role] = fmt.Sprint(alias)
-				}
 			}
 		}
 		if v, ok := body["auditor"].(string); ok {
@@ -608,7 +597,7 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 		if v, ok := body["remote_control"].(bool); ok {
 			remote = &v
 		}
-		s, err := core.SettingsUpdate(models, remote)
+		s, err := core.SettingsUpdate(nil, remote)
 		if err != nil {
 			gateOr500(w, err)
 			return
@@ -686,9 +675,6 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 			core.Log(st, map[bool]string{true: "You paused the desk: nothing is posted or started.", false: "You resumed the desk."}[on], "stage")
 		case "approve":
 			result, err = auditreport.Approve(pid, st, core.SettingsRead().Auditor, str("hash", 0))
-		case "plugin":
-			on, _ := body["enabled"].(bool)
-			err = plugins.SetEnabled(st, str("id", 0), on, "user")
 		case "remote":
 			if on, ok := body["on"].(bool); ok {
 				st.Remote = &on

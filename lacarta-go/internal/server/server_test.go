@@ -141,6 +141,7 @@ func dropAuditKind(hub any) {
 		}
 	}
 	delete(h, "plugins")
+	delete(h, "skills")
 }
 
 // TestAPIParity runs the prototype's daemon and the Go handler on the same state files and
@@ -303,16 +304,23 @@ func TestActions(t *testing.T) {
 	if h, _ := core.HubRead(); func() bool { x, _ := h.Projects.Get(taskID); return !x.Archived }() {
 		t.Fatal("archived")
 	}
-	if code, v := doPost(t, srv, "/api/settings", `{"models":{"software":{"security_review":"gpt"}}}`, nil); code != 409 {
-		t.Fatalf("bad model: %d %v", code, v)
+	// Models, skills and plugins are read from the config file: the console can't change them.
+	for _, body := range []string{`{"models":{"software":{"security_review":"haiku"}},"remote_control":false}`,
+		`{"skills":{"all":["x"]}}`, `{"plugins":{"gitleaks":false}}`} {
+		if code, v := doPost(t, srv, "/api/settings", body, nil); code != 409 {
+			t.Fatalf("settings %s: %d %v", body, code, v)
+		}
 	}
-	if code, v := doPost(t, srv, "/api/settings", `{"models":{"software":{"security_review":"haiku"}},"remote_control":false}`, nil); code != 200 {
+	if code, _ := doPost(t, srv, p+"/plugin", `{"id":"gitleaks","enabled":false}`, nil); code != 404 {
+		t.Fatal("the plugin toggle should be gone")
+	}
+	if code, v := doPost(t, srv, "/api/settings", `{"remote_control":false}`, nil); code != 200 {
 		t.Fatalf("settings: %d %v", code, v)
 	}
 	if s := core.SettingsRead(); s.RemoteControl {
 		t.Fatal("remote default off")
-	} else if m, _ := s.Models.Get("software"); func() string { v, _ := m.Get("security_review"); return v }() != "haiku" {
-		t.Fatal("model saved")
+	} else if m, _ := s.Models.Get("software"); func() string { v, _ := m.Get("security_review"); return v }() != "opus" {
+		t.Fatal("the console must not change a model")
 	}
 	if code, _ := doPost(t, srv, "/api/p/nope/answer", `{}`, nil); code != 404 {
 		t.Fatal("unknown project")

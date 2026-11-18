@@ -169,7 +169,13 @@ Stages: `specification` → `implementation` → `final-review` → `done`; `sto
 
 ### FR-22: Models per kind of project
 - Priority: must. Status: **done**.
-- Settings hold a model alias (`opus`, `sonnet`, `haiku`, `fable`) for every role of every kind; agents read `models` before each spawn; `models --set role=alias` changes the current kind's role when the user asks in the terminal. Unknown kinds, roles or models are refused.
+- The config files hold a model alias (`opus`, `sonnet`, `haiku`, `fable`) for every role of every kind; agents read `models` before each spawn; `models --set role=alias` writes the home config file when the user asks in the terminal. Unknown kinds, roles or models are refused. The console shows the models and never changes them.
+
+### FR-22b: Skills per kind of project and role
+- Priority: must. Status: **done**.
+- The config files, and nothing else, say which skills each role loads: `skills.all` for every agent, `skills.<kind>.all` for every agent of a kind, `skills.<kind>.<role>` for one role; a project's file adds `all` and per-role lists for its own kind, and `-name` drops a skill a wider list added. Entries are names only (a skill of the agent CLI, `plugin:skill`, or a lacarta plugin's id), checked against a strict pattern because they go into prompts.
+- The session gets its role's skills in its start context; `agent start` and the briefs lacarta writes give a subagent's. A lacarta plugin whose files changed since it was trusted is not handed out. `skills` shows the result; `config check` fails on an entry that is ignored and notes a name lacarta doesn't find.
+- lacarta's plugins are turned on or off in the config files only (`plugins`): no console toggle, no command, no state.
 
 ### FR-23: Live updates
 - Priority: should. Status: **done** (`server_test.go: TestEvents`, Playwright: the live-update test).

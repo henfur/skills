@@ -1,32 +1,25 @@
 <script>
   import Badge from "../components/Badge.svelte";
-  import { app, refresh } from "../lib/state.svelte.js";
-  import { post, projectURL } from "../lib/api.js";
+  import { app } from "../lib/state.svelte.js";
   let { st } = $props();
+  // Read-only: the config files turn plugins on and off.
   const list = $derived(app.data.audit?.plugins || []);
-  let error = $state(""), busy = $state("");
-  async function toggle(p, on) {
-    busy = p.id;
-    const r = await post(projectURL(app.data.id, "plugin"), { id: p.id, enabled: on });
-    busy = "";
-    error = r.ok ? "" : (r.json.error || "Not changed.");
-    await refresh();
-  }
+  const path = $derived(app.data.config?.path);
+  const from = p => p.need === "required" ? "Required for this kind of project"
+    : p.config === "project" ? "Set in this project's config.json"
+    : p.config === "home" ? "Set in the machine's config.json" : "Default";
 </script>
 
 <h1>Plugins</h1>
-<p class="lede">What the agents may use in this project. A change applies from the next wave or session; the project keeps the version it was enabled with.</p>
-<span class="err" role="alert">{error}</span>
+<p class="lede">What the agents may use in this project. The configuration files decide: a change there applies from the next wave or session; a run keeps the version it started with.</p>
 <div class="stack">
   {#each list as p (p.id)}
-    <section class="card plugin">
+    <section class="card plugin" data-plugin={p.id}>
       <div class="row">
-        <label class="toggle" style="margin:0"><input type="checkbox" checked={p.enabled} disabled={p.need === "required" || p.config === "project" || busy === p.id || (!p.enabled && (!p.installed || p.problem))}
-          onchange={e => toggle(p, e.currentTarget.checked)} aria-label="Enable {p.name}" />
-          <span><strong>{p.name}</strong></span></label>
+        <strong>{p.name}</strong>
+        <Badge s={p.enabled ? "approved" : "draft"} text={p.enabled ? "On" : "Off"} />
         <Badge s="draft" text={p.type} />
-        {#if p.need === "required"}<Badge s="awaiting-approval" text="Required" />{/if}
-        {#if p.config === "project"}<Badge s="draft" text="Set in this project's config.json" />{/if}
+        <span class="small muted">{from(p)}</span>
         {#if p.custom}<Badge s="accepted" text="Custom" />{/if}
         {#if p.tested === false}<Badge s="changed" text="Not the tested version" />{/if}
         {#if p.drift}<Badge s="changed" text="Installed version differs from this project's" />{/if}
@@ -37,4 +30,5 @@
     </section>
   {/each}
 </div>
-<p class="small muted">Add your own skills or attack-class files with <code>lacarta plugin add &lt;folder or git URL&gt;</code> in a terminal: it shows their content before you trust them.</p>
+<p class="small muted">Turn one on or off with <code>"plugins": {"{"}"&lt;id&gt;": true{"}"}</code> in {#if path}<code>{path}</code>{:else}this project's config.json{/if}, or for every project in the machine's file (Settings).
+  Add your own skills or attack-class files with <code>lacarta plugin add &lt;folder or git URL&gt;</code> in a terminal: it shows their content before you trust them.</p>

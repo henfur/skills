@@ -55,14 +55,12 @@ func auditCommands() []*Cmd {
 			Pos: []Pos{{Name: "dir"}}},
 		{Name: "wish", Help: "Ask the auditor for a tool or environment you need (the wishlist).", Run: cmdWish,
 			Opts: []Opt{{Name: "text", Required: true}, {Name: "unit", Help: "The coverage_id it's for."}}},
-		{Name: "plugin list", Help: "Installed and known plugins (and, in a project, which are enabled).", Run: cmdPluginList},
+		{Name: "plugin list", Help: "Installed and known plugins (and, in a project, which its config files turn on).", Run: cmdPluginList},
 		{Name: "plugin install", Help: "Install a built-in plugin (adopts an existing install).", Run: cmdPluginInstall, Pos: []Pos{{Name: "id"}}},
 		{Name: "plugin add", Help: "Add a custom skill or companion from a folder or git URL; shows it first, adds it with --trust.",
 			Run: cmdPluginAdd, Pos: []Pos{{Name: "source"}}, Opts: []Opt{{Name: "type", Choices: []string{plugins.TypeSkill, plugins.TypeCompanion}},
 				{Name: "trust", Kind: flag, Help: "I read its files and trust it."}}},
 		{Name: "plugin remove", Help: "Forget a custom plugin.", Run: cmdPluginRemove, Pos: []Pos{{Name: "id"}}},
-		{Name: "plugin enable", Help: "Enable a plugin in this project.", Run: cmdPluginToggle(true), Pos: []Pos{{Name: "id"}}},
-		{Name: "plugin disable", Help: "Disable a plugin in this project.", Run: cmdPluginToggle(false), Pos: []Pos{{Name: "id"}}},
 		{Name: "sandbox run", Help: "Run a command in the sandbox: no network, read-only target, writes only to --scratch.",
 			Run: cmdSandboxRun, Pos: []Pos{{Name: "cmd", Many: true, Help: "After `--`."}}, Opts: []Opt{
 				{Name: "scratch", Required: true}, {Name: "ro", Kind: list, Help: "A read-only folder; repeat."},
@@ -500,6 +498,9 @@ func cmdAuditBrief(a *Args) error {
 			}
 		}
 	}
+	if s := plugins.Instruction(plugins.ForRole(st, role.ID)); s != "" {
+		a.Println("- " + s)
+	}
 	a.Printf("- Missing a tool or an environment to confirm something? `%s --agent <id> wish --text \"...\"`, then carry on; "+
 		"the lead stays needs_validation until the auditor provides it.\n", self())
 	a.Println("The skill's prompt for your role follows.")
@@ -657,7 +658,8 @@ func cmdPluginAdd(a *Args) error {
 			"same command with --trust.\n", p.Skill)
 		return nil
 	}
-	a.Printf("Added %s (%s, content %s). Enable it per project with `plugin enable %s` or in the console.\n", p.ID, p.Type, p.Ref, p.ID)
+	a.Printf("Added %s (%s, content %s). Nothing uses it yet: name it in a config file, under `skills` for the roles that "+
+		"load it (`skills` shows them), or under `plugins` to turn it on in a security audit.\n", p.ID, p.Type, p.Ref)
 	return nil
 }
 
@@ -667,18 +669,6 @@ func cmdPluginRemove(a *Args) error {
 	}
 	a.Println("Removed.")
 	return nil
-}
-
-func cmdPluginToggle(on bool) func(*Args) error {
-	return func(a *Args) error {
-		id := a.Positional("id")
-		err := store.Edit(func(st *core.State) error { return plugins.SetEnabled(st, id, on, "user (terminal)") })
-		if err != nil {
-			return err
-		}
-		a.Printf("%s %s for this project.\n", id, map[bool]string{true: "enabled", false: "disabled"}[on])
-		return nil
-	}
 }
 
 func cmdSandboxRun(a *Args) error {

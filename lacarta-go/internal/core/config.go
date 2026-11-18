@@ -14,8 +14,9 @@ import (
 	"strings"
 )
 
-// Config files. ~/.lacarta/config.json holds the machine's choices; the console's Settings page
-// writes it too. A project's own config.json (in its state folder: <repo>/.lacarta for a software
+// Config files. ~/.lacarta/config.json holds the machine's choices. The models and the skills of
+// every role are set there and nowhere else: the console shows them and doesn't change them. A
+// project's own config.json (in its state folder: <repo>/.lacarta for a software
 // project) overrides some of them for that project. Built-in defaults < home < project.
 //
 // A value the file can't hold is skipped with a warning, so a typo never stops a session:
@@ -63,6 +64,7 @@ type Settings struct {
 	Templates     string                     `json:"templates,omitempty"`
 	Plugins       map[string]bool            `json:"plugins,omitempty"`
 	Tools         map[string]string          `json:"tools,omitempty"`
+	Skills        HomeSkills                 `json:"-"` // the console gets them resolved, see plugins.KindSkills
 	Config        ConfigMeta                 `json:"config"`
 	explicit      map[string]map[string]bool // kind -> role set in the file
 	remoteSet     bool
@@ -81,12 +83,13 @@ type ConfigMeta struct {
 // ProjectConfig: what a project's config.json overrides.
 type ProjectConfig struct {
 	ConfigMeta
-	ID            string            `json:"id,omitempty"`     // the project's id in the console, set by lacarta
-	Name          string            `json:"name,omitempty"`   // shown everywhere instead of the state's name
-	Models        map[string]string `json:"models,omitempty"` // role -> alias, for the project's kind
-	RemoteControl *bool             `json:"remote_control,omitempty"`
-	Templates     string            `json:"templates,omitempty"` // absolute, inside the project
-	Plugins       map[string]bool   `json:"plugins,omitempty"`
+	ID            string              `json:"id,omitempty"`     // the project's id in the console, set by lacarta
+	Name          string              `json:"name,omitempty"`   // shown everywhere instead of the state's name
+	Models        map[string]string   `json:"models,omitempty"` // role -> alias, for the project's kind
+	Skills        map[string][]string `json:"skills,omitempty"` // role or "all" -> names, for the project's kind
+	RemoteControl *bool               `json:"remote_control,omitempty"`
+	Templates     string              `json:"templates,omitempty"` // absolute, inside the project
+	Plugins       map[string]bool     `json:"plugins,omitempty"`
 }
 
 // readConfig decodes a config file key by key, so one bad value doesn't lose the others.
@@ -223,6 +226,8 @@ func SettingsRead() *Settings {
 				s.Plugins = nil
 				warn("plugins: expected {\"<plugin id>\": true or false}.")
 			}
+		case "skills":
+			s.Skills = homeSkills(v, warn)
 		case "tools":
 			var tools map[string]string
 			if json.Unmarshal(v, &tools) != nil {
@@ -245,7 +250,7 @@ func SettingsRead() *Settings {
 				s.Tools[name] = p
 			}
 		default:
-			warn("unknown setting %q. Settings: models, remote_control, auditor, templates, plugins, tools.", key)
+			warn("unknown setting %q. Settings: models, skills, remote_control, auditor, templates, plugins, tools.", key)
 		}
 	}
 	return s
@@ -619,6 +624,10 @@ func ProjectConfigRead(st *State) *ProjectConfig {
 				pc.Plugins = nil
 				warn("plugins: expected {\"<plugin id>\": true or false}.")
 			}
+		case "skills":
+			if l := roleSkillLists(v, kind, "skills", warn); len(l) > 0 {
+				pc.Skills = l
+			}
 		case "desk":
 			if st.Template != Desk {
 				warn("desk: only review desks have desk settings.")
@@ -630,7 +639,7 @@ func ProjectConfigRead(st *State) *ProjectConfig {
 		case "tools", "auditor":
 			warn("%s: can only be set in %s, not in a project.", key, HomeConfigPath())
 		default:
-			warn("unknown setting %q. A project can set: id, name, models, remote_control, templates, plugins (and desk, for a review desk).", key)
+			warn("unknown setting %q. A project can set: id, name, models, skills, remote_control, templates, plugins (and desk, for a review desk).", key)
 		}
 	}
 	return pc

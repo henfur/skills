@@ -87,9 +87,10 @@
 <View {st} {d} />
 {#if app.data.config}
   {@const cfg = app.data.config}
-  {#if current[0] === "overview" && (cfg.name || cfg.models || cfg.plugins || cfg.templates || cfg.remote_control != null)}
+  {#if current[0] === "overview" && (cfg.name || cfg.models || cfg.skills || cfg.plugins || cfg.templates || cfg.remote_control != null)}
     <p class="small muted config-note">This project's <code>{cfg.path}</code> sets
       {[cfg.name && "its name", cfg.models && `the models of ${Object.keys(cfg.models).map(r => (app.hub.catalog.kinds[st.template]?.roles[r]?.label || r).toLowerCase()).join(", ")}`,
+        cfg.skills && `the skills of ${Object.keys(cfg.skills).map(r => r === "all" ? "every agent" : (app.hub.catalog.kinds[st.template]?.roles[r]?.label || r).toLowerCase()).join(", ")}`,
         cfg.templates && "the spec templates", cfg.plugins && "plugins", cfg.remote_control != null && "remote control"].filter(Boolean).join(", ")}, over the machine's Settings.</p>
   {/if}
 {/if}

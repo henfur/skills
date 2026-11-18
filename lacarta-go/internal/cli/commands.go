@@ -12,6 +12,7 @@ import (
 
 	"lacarta/internal/core"
 	"lacarta/internal/hooks"
+	"lacarta/internal/plugins"
 	"lacarta/internal/server"
 	"lacarta/skill"
 )
@@ -127,7 +128,7 @@ func commands() []*Cmd {
 		{Name: "answer", Help: "Record an answer the user gave in the terminal, word for word.", Run: cmdAnswer,
 			Pos: []Pos{{Name: "id"}}, Opts: []Opt{{Name: "choice", Help: "One of the question's options."}, {Name: "comment", Help: "The user's words."}}},
 		{Name: "decisions", Help: "Print the decision log as markdown (for the spec reviewer).", Run: cmdDecisions},
-		{Name: "agent start", Help: "Register a subagent before spawning it; gives its id, name and model.", Run: cmdAgentStart, Opts: []Opt{
+		{Name: "agent start", Help: "Register a subagent before spawning it; gives its id, name, model and the skills to load.", Run: cmdAgentStart, Opts: []Opt{
 			{Name: "role", Required: true, Choices: roleChoices()}, {Name: "task", Required: true, Help: "One line: what it is doing."},
 			{Name: "phase", Help: "Phase number, 'spec' or 'final'."}}},
 		{Name: "agent update", Help: "Change an agent's current task or status.", Run: cmdAgentUpdate, Pos: []Pos{{Name: "id"}},
@@ -139,7 +140,7 @@ func commands() []*Cmd {
 		{Name: "agent list", Help: "All agents with their status.", Run: cmdAgentList},
 		{Name: "models", Help: "Show the model for each role of this kind of project (read it before every spawn).", Run: cmdModels,
 			Opts: []Opt{{Name: "json", Kind: flag}, {Name: "set", Kind: list, Metavar: "ROLE=MODEL",
-				Help: "Change a role's model as the user asked in the terminal. Models: " + aliases() + "."},
+				Help: "Write a role's model into the home config file, as the user asked in the terminal. Models: " + aliases() + "."},
 				{Name: "project", Kind: flag, Help: "With --set: write this project's config.json instead of the machine's " +
 					"(MODEL `default` removes the override)."}}},
 		{Name: "decide", Help: "Log a decision you made yourself.", Run: cmdDecide, Opts: []Opt{
@@ -202,7 +203,7 @@ func run(a *Args) error {
 		}
 		store = nil // a stale $LACARTA_PROJECT doesn't matter to commands that need no project
 	}
-	if a.Cmd.Name == "models" || noProject[a.Cmd.Name] {
+	if a.Cmd.Name == "models" || a.Cmd.Name == "skills" || noProject[a.Cmd.Name] {
 		return a.Cmd.Run(a)
 	}
 	if store == nil {
@@ -1337,6 +1338,7 @@ func cmdInbox(a *Args) error {
 
 func cmdAgentStart(a *Args) error {
 	var ag *core.Agent
+	var skills []*plugins.AgentSkill
 	kind := core.Software
 	err := store.Edit(func(st *core.State) error {
 		if st.Template == core.Single {
@@ -1356,6 +1358,7 @@ func cmdAgentStart(a *Args) error {
 			phase = &p
 		}
 		ag = core.NewAgent(st, a.Str("role"), a.Str("task"), phase, true)
+		skills = plugins.ForRole(st, ag.Role)
 		return nil
 	})
 	if err != nil {
@@ -1364,6 +1367,9 @@ func cmdAgentStart(a *Args) error {
 	role, _ := core.KindByID(kind).Role(ag.Role)
 	a.Printf("%s %s: %s on %s (Agent tool model: %s).\n", ag.ID, ag.Name, strings.ToLower(role.Label), core.ModelName(ag.Model), ag.Model)
 	a.Printf("Tell the subagent its name is %s and to run every lacarta command as `%s --agent %s <command>`.\n", ag.Name, self(), ag.ID)
+	if s := plugins.Instruction(skills); s != "" {
+		a.Printf("Put this in its prompt as it is, unless its brief from lacarta already has it:\n  %s\n", s)
+	}
 	a.Printf("When it returns: `agent done %s --summary \"...\"` (or `--failed`).\n", ag.ID)
 	return nil
 }

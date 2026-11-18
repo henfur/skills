@@ -1,6 +1,7 @@
 // Package plugins knows the skills, attack-class companions and check tools lacarta can give
-// agents, installs or adopts them machine-wide (~/.lacarta/plugins.json), and enables them per
-// project. A kind can require a plugin: the security audit requires Cloudflare's skill.
+// agents, and installs or adopts them machine-wide (~/.lacarta/plugins.json). Which ones a project
+// uses, and which skills each role loads, is read from the config files only (see agentskills.go).
+// A kind can require a plugin: the security audit requires Cloudflare's skill.
 package plugins
 
 import (
@@ -510,7 +511,7 @@ type ProjectPlugin struct {
 	Need    string `json:"need"` // Required, Default or Optional for this project's kind
 	Pinned  string `json:"pinned"`
 	Drift   bool   `json:"drift"`            // the installed version differs from the project's pin
-	Config  string `json:"config,omitempty"` // "project" when its config.json decides, "home" when the machine's default does
+	Config  string `json:"config,omitempty"` // "project" when its config.json decides, "home" when the machine's does
 }
 
 // ForProject lists the plugins of a project with their state there.
@@ -519,7 +520,8 @@ func ForProject(st *core.State) ([]*ProjectPlugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The project's config.json wins over the console's choice, which wins over the home default.
+	// The project's config.json, else the machine's, else what the project's kind needs. Nothing
+	// else turns a plugin on or off: the state only keeps the version a run was pinned to.
 	project, home := core.ProjectConfigRead(st).Plugins, core.SettingsRead().Plugins
 	out := []*ProjectPlugin{}
 	for _, i := range all {
@@ -535,8 +537,6 @@ func ForProject(st *core.State) ([]*ProjectPlugin, error) {
 		}
 		if on, ok := project[i.ID]; ok {
 			p.Enabled, p.Config = on && usable, core.FromProject
-		} else if pp != nil {
-			p.Enabled = pp.Enabled
 		} else if on, ok := home[i.ID]; ok {
 			p.Enabled, p.Config = on && usable, core.FromHome
 		} else {
@@ -564,43 +564,6 @@ func Enabled(st *core.State) ([]*ProjectPlugin, error) {
 		}
 	}
 	return out, nil
-}
-
-// SetEnabled turns a plugin on or off for a project and pins its current version.
-func SetEnabled(st *core.State, id string, on bool, by string) error {
-	all, err := ForProject(st)
-	if err != nil {
-		return err
-	}
-	for _, p := range all {
-		if p.ID != id {
-			continue
-		}
-		if !on && p.Need == Required {
-			return core.Gate("%s is required for this kind of project.", p.Name)
-		}
-		if p.Config == core.FromProject {
-			return core.Gate("%s is set in this project's %s: change it there.", p.Name, core.ProjectConfigRead(st).Path)
-		}
-		if on && (!p.Installed || p.Problem != "") {
-			hint := p.Problem
-			if p.InstallHint != "" {
-				hint += " Install: " + p.InstallHint
-			}
-			return core.Gate("%s can't be enabled: %s", p.Name, strings.TrimSpace(hint))
-		}
-		if st.Plugins == nil {
-			st.Plugins = map[string]*core.ProjectPlugin{}
-		}
-		st.Plugins[id] = &core.ProjectPlugin{Enabled: on, Ref: p.Ref, By: by, At: core.Now()}
-		state := "disabled"
-		if on {
-			state = "enabled"
-		}
-		core.Log(st, fmt.Sprintf("Plugin %s %s (version %s). It applies from the next wave or session.", p.Name, state, short(p.Ref)), "stage")
-		return nil
-	}
-	return core.Gate("No plugin %s.", id)
 }
 
 // PinAll pins the enabled plugins' current versions (at the start of an audit run).

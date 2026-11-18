@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync, appendFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { readFileSync, appendFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 // The seed script's projects: a task with a question, an ended task, a software project with a
@@ -76,16 +76,26 @@ test("chat shows the transcript and queues a message", async ({ page }) => {
   await expect(page.locator(".ptabs")).toContainText("1 queued");
 });
 
-test("settings: change a model", async ({ page }) => {
-  await page.goto("/#/settings");
-  const select = page.getByLabel("Model for Security review");
-  await select.selectOption("haiku");
-  await expect(page.getByText("Unsaved")).toBeVisible();
-  await page.getByRole("button", { name: "Save models" }).click();
-  await expect(page.getByText("Saved.")).toBeVisible();
-  await page.reload();
-  await expect(page.getByLabel("Model for Security review")).toHaveValue("haiku");
-  expect(lacarta("--root", ids().shopRoot, "models")).toMatch(/security_review\s+haiku/);
+test("settings: models and skills are read from the config file, not changed here", async ({ page }) => {
+  const file = `${ids().home}/config.json`;
+  const before = existsSync(file) ? readFileSync(file, "utf8") : null;
+  writeFileSync(file, JSON.stringify({ ...(before ? JSON.parse(before) : {}), models: { software: { security_review: "haiku" } },
+    skills: { all: ["house-style-e2e"], software: { security_review: ["sec-tools:scan"] }, incident: { all: ["-house-style-e2e"] } } }));
+  try {
+    await page.goto("/#/settings");
+    await expect(page.locator("select")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save models" })).toHaveCount(0);
+    const row = page.locator('[data-role="software.security_review"]');
+    await expect(row.locator(".model")).toContainText("Haiku 5.5");
+    await expect(row.locator(".skills")).toContainText("house-style-e2e · not found");
+    await expect(row.locator(".skills")).toContainText("sec-tools:scan");
+    await expect(page.locator('[data-role="single.agent"] .skills')).toContainText("house-style-e2e");
+    await expect(page.locator('[data-role="incident.investigator"] .skills')).toContainText("No skills");
+    expect(lacarta("--root", ids().shopRoot, "models")).toMatch(/security_review\s+haiku/);
+    expect(lacarta("--root", ids().shopRoot, "skills", "--role", "security_review")).toContain("load `house-style-e2e`, `sec-tools:scan` with the Skill tool");
+  } finally {
+    if (before === null) unlinkSync(file); else writeFileSync(file, before);
+  }
 });
 
 test("config files: the machine's on Settings, a project's over it", async ({ page }) => {

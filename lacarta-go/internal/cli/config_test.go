@@ -125,7 +125,7 @@ func TestConfigFiles(t *testing.T) {
 		t.Error("a project's config must not choose the tools")
 	}
 
-	// The project's plugin choice is locked against the console.
+	// The project's config decides its plugins.
 	st, err := core.SoftwareStore(root).Read()
 	if err != nil {
 		t.Fatal(err)
@@ -138,9 +138,6 @@ func TestConfigFiles(t *testing.T) {
 		if p.ID == "gitleaks" && p.Config != core.FromProject {
 			t.Errorf("gitleaks should be decided by the project config: %+v", p)
 		}
-	}
-	if err := plugins.SetEnabled(st, "gitleaks", false, "user"); err == nil || !strings.Contains(err.Error(), "change it there") {
-		t.Errorf("console toggle should be refused, got %v", err)
 	}
 
 	// models --set --project writes the project's file; `default` removes the override.

@@ -30,9 +30,10 @@ test("audit views render", async ({ page }) => {
   await page.locator(".coverage .cell").first().click();
   await expect(page.getByText("Update order")).toBeVisible();
   await page.goto(`/#/p/${ids().audit}/plugins`);
-  const skill = page.getByRole("checkbox", { name: "Enable Cloudflare security-audit skill" });
-  await expect(skill).toBeChecked();
-  await expect(skill).toBeDisabled();   // required: can't be turned off
+  const skill = page.locator('[data-plugin="security-audit"]');   // read-only: the config files decide
+  await expect(skill).toContainText("On");
+  await expect(skill).toContainText("Required for this kind of project");
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
 });
 
 test("the auditor reviews, approves and gets a signed report", async ({ page, request }) => {

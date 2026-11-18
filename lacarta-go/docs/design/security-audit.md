@@ -22,13 +22,13 @@ validators in the real sandbox; Playwright `web/app/tests/audit.spec.js`, which 
 | Kind `audit` ("Security audit"): stages scope → recon → coverage-plan → hunt → review → report → done, roles, `Next:` lines, state in `~/.lacarta/audits/<id>/` with runs in `run-N/` | `internal/core/audit.go` |
 | Gates: rules of engagement and coverage plan (questions with Approve / Request changes), the skill's validators on `audit plan submit` and `audit findings submit`, no open ledger unit before findings | `internal/core/audit.go`, `internal/cli/audit.go` |
 | Auditor review per finding (accept, change severity, reject, ask for another check; keep, confirm, out of scope), reasons required, recheck loop back to the agents | `core.ReviewFinding`, console `ReviewCard` |
-| Plugins: built-in definitions (security-audit required, pinned to `c1c8a8c` by content hash; gitleaks and osv-scanner default on), adopt existing installs, install by git clone, custom skills and companions with a preview before `--trust`, per-project enable/disable with version pins, required ones locked | `internal/plugins` |
+| Plugins: built-in definitions (security-audit required, pinned to `c1c8a8c` by content hash; gitleaks and osv-scanner default on), adopt existing installs, install by git clone, custom skills and companions with a preview before `--trust`, on/off per project from the config files only (no console toggle since the skills setting, see the README's "Skills per role"), version pins per run, required ones always on | `internal/plugins` |
 | Preflight: skill files and version, node, sandbox, validator self-test (cached per skill version) | `plugins.Preflight` |
 | Sandbox: bubblewrap + prlimit, loopback-only network, empty environment, home hidden, target read-only, writes only to scratch; used for validators, check tools and `lacarta sandbox run` | `internal/sandbox` |
 | Report: deterministic markdown from the records and reviews, print-ready HTML (watermark and footer on every page), PDF through headless Chromium when installed, the fixed AI-assistance disclosure in front matter, cover, every finding, the method section and the verification section | `internal/auditreport` |
 | Approval: console only, needs the auditor name from Settings, the draft hash the auditor read, a confirmation checkbox; writes `final/vN/` with `report.provenance.json`, its SSHSIG signature (Ed25519, verified by `ssh-keygen -Y verify` in tests) and `allowed_signers`; `lacarta audit verify` checks signature, hashes and disclosure | `auditreport.Approve`, `auditreport.Verify`, `internal/provenance` |
 | Console: Overview, Coverage (matrix, units, architecture map), Findings (with review cards), Report (summary editor, draft, approval, downloads), Plugins; Settings → Auditor and machine plugins | `web/app/src/views/Audit*.svelte`, `Coverage`, `Report`, `Plugins` |
-| CLI: `audit init|preflight|guide|scope|plan submit|findings submit|summary|brief|checks|rerun|verify`, `wish`, `plugin list|install|add|remove|enable|disable`, `sandbox run` | `internal/cli/audit.go` |
+| CLI: `audit init|preflight|guide|scope|plan submit|findings submit|summary|brief|checks|rerun|verify`, `wish`, `plugin list|install|add|remove`, `sandbox run` | `internal/cli/audit.go` |
 
 Differences from the design:
 - The kind's id is `audit`, not `security-audit` (the plugin keeps that name).
@@ -58,7 +58,8 @@ Goals:
    the console, with the user deciding at the points that matter.
 2. The Cloudflare skill is a **hard requirement**: an audit can't start without it, at a known version.
 3. **Plugins**: custom skills and extra attack-class material, installed once per machine and enabled or disabled per project from
-   the console. Works for every kind; required plugins of a kind can't be disabled.
+   the console. Works for every kind; required plugins of a kind can't be disabled. *(Changed since: the config files turn
+   plugins on and off and give skills to roles; the console only shows them.)*
 
 Non-goals (for this phase):
 - Re-implementing the skill's methodology. Lacarta orchestrates and records; the skill's prompts, phases, schema and validators stay

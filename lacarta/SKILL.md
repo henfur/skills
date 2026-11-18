@@ -40,7 +40,8 @@ Run commands from the project root, or anywhere below it. When the lacarta hooks
 | Security audit of a codebase | `audit init --target <folder>` (not `init`), then follow `audit guide` |
 | New project | `init [--name "<name>"] [--summary "<one line>"]` (name defaults to the one in `.lacarta/config.json`, else the folder; `init` saves it there) |
 | Register a subagent before spawning it | `agent start --role ... --task ...`; then `agent done <id>`; `agent list` |
-| Models for each role | `models` (`--json`); the user sets them on the console's Settings page; `models --set role=alias` only when they ask in the terminal |
+| Models for each role | `models` (`--json`); the user sets them in the config file (`config` shows where); `models --set role=alias` only when they ask in the terminal |
+| Skills for each role | `skills`; set by the user in the config files only. `agent start` prints the paragraph to put in the subagent's prompt |
 | Console URL, or start it | `serve` prints the URL if it runs (sessions start it on their own); otherwise run it in the background |
 | Messages from the console, without hooks | `inbox` |
 | Where are we, what is next | `status` (`--json` for everything) |
@@ -82,7 +83,7 @@ The user chooses a model for each role on the console's **Settings** page; the c
 | `functional_review`, `security_review` | the phase reviewers | Sonnet 5.5, Opus 5.5 |
 | `final_functional_review`, `final_security_review` | the final reviewers | Sonnet 5.5, Opus 5.5 |
 
-Run `models` right before every spawn and pass that role's alias (`opus`, `sonnet`, `haiku`, `fable`) as the Agent tool's `model`. Read it each time rather than remembering it: the user can change it in the console at any moment, and the change applies to the next agent you start. If your environment cannot choose a subagent's model, say so once and carry on with the default rather than silently ignoring the setting.
+Run `models` right before every spawn and pass that role's alias (`opus`, `sonnet`, `haiku`, `fable`) as the Agent tool's `model`. Read it each time rather than remembering it: the user can change it in the config file at any moment, and the change applies to the next agent you start. When `agent start` prints a "Skills set for you" paragraph, put it at the top of that subagent's prompt as it is: those are the skills the user configured for its role. Never add, drop or change them yourself. If your environment cannot choose a subagent's model, say so once and carry on with the default rather than silently ignoring the setting.
 
 ## Agents
 
