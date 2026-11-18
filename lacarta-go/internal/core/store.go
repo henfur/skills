@@ -176,6 +176,9 @@ func Migrate(st *State) error {
 	if st.Desk != nil {
 		migrateDesk(st.Desk)
 	}
+	if st.Incident != nil {
+		migrateIncident(st.Incident)
+	}
 	if a := st.Audit; a != nil {
 		if a.Runs == nil {
 			a.Runs = []*AuditRun{}

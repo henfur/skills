@@ -16,6 +16,12 @@
   import DeskOverview from "./DeskOverview.svelte";
   import DeskQueue from "./DeskQueue.svelte";
   import DeskSettings from "./DeskSettings.svelte";
+  import IncidentOverview from "./IncidentOverview.svelte";
+  import IncidentTimeline from "./IncidentTimeline.svelte";
+  import IncidentInvestigations from "./IncidentInvestigations.svelte";
+  import IncidentActions from "./IncidentActions.svelte";
+  import IncidentEvidence from "./IncidentEvidence.svelte";
+  import IncidentReports from "./IncidentReports.svelte";
   import Icon from "../components/Icon.svelte";
   import Badge from "../components/Badge.svelte";
   import { app, L, kindOf } from "../lib/state.svelte.js";
@@ -31,6 +37,10 @@
       ["plugins", "Plugins", Plugins], ["decisions", "Decisions", Decisions], ["activity", "Activity", Activity]],
     desk: [["overview", "Overview", DeskOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
       ["queue", "Queue", DeskQueue], ["desk", "Desk", DeskSettings], ["decisions", "Decisions", Decisions], ["activity", "Activity", Activity]],
+    incident: [["overview", "Overview", IncidentOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
+      ["timeline", "Timeline", IncidentTimeline], ["investigations", "Investigations", IncidentInvestigations],
+      ["actions", "Actions", IncidentActions], ["evidence", "Evidence", IncidentEvidence], ["reports", "Reports", IncidentReports],
+      ["decisions", "Decisions", Decisions], ["activity", "Activity", Activity]],
     single: [["overview", "Overview", SingleOverview], ["chat", "Chat", Chat], ["questions", "Questions", Questions],
       ["activity", "Activity", Activity]],
   };
@@ -47,6 +57,11 @@
     findings: d.audit ? (d.audit.has_findings ? [d.audit.to_review ? `${d.audit.to_review} to review` : (app.data.audit?.findings || []).length, d.audit.to_review > 0] : null) : d.open_findings ? [st.findings.filter(f => UNRESOLVED.has(f.status)).length, d.open_findings.critical + d.open_findings.high > 0] : null,
     decisions: [st.decisions.length, false],
     queue: d.desk ? [d.desk.drafts ? `${d.desk.drafts} draft${d.desk.drafts === 1 ? "" : "s"}` : (d.desk.counts.queued || 0) + (d.desk.counts.reviewing || 0), d.desk.drafts > 0] : null,
+    timeline: d.incident ? [d.incident.counts.timeline, false] : null,
+    investigations: d.incident ? [d.incident.investigating.open ? `${d.incident.investigating.open} open` : d.incident.counts.investigations, false] : null,
+    actions: d.incident ? [d.incident.waiting.length ? `${d.incident.waiting.length} for you` : d.incident.counts.actions, d.incident.waiting.length > 0] : null,
+    evidence: d.incident ? [d.incident.counts.evidence, false] : null,
+    reports: d.incident ? [d.incident.draft ? "1 draft" : d.incident.counts.reports, !!d.incident.draft] : null,
     chat: d.pending_messages ? [`${d.pending_messages} queued`, false] : null,
   });
   const View = $derived(current[2]);

@@ -108,8 +108,8 @@ func Slug(text string) string {
 // RegisterSoftware adds a software project to the hub (idempotent) and returns its id.
 func RegisterSoftware(root, name string) (string, error) { return registerFolder(root, name, Software) }
 
-// RegisterFolder adds the project whose state is in <root>/.lacarta (a software project or a review
-// desk) to the hub.
+// RegisterFolder adds the project whose state is in <root>/.lacarta (a software project, a review
+// desk or an incident case) to the hub.
 func RegisterFolder(root, name string) (string, error) {
 	return registerFolder(root, name, FolderTemplate(root))
 }
@@ -120,10 +120,10 @@ func FolderTemplate(root string) string {
 		Template string `json:"template"`
 	}
 	b, _ := os.ReadFile(filepath.Join(root, StateDir, "state.json"))
-	if json.Unmarshal(b, &head) != nil || head.Template != Desk {
+	if json.Unmarshal(b, &head) != nil || (head.Template != Desk && head.Template != Incident) {
 		return Software
 	}
-	return Desk
+	return head.Template
 }
 
 func registerFolder(root, name, template string) (string, error) {

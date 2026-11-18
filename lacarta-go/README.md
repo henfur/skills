@@ -34,6 +34,7 @@ internal/hooks/    hook events, transcript reader, install (Claude Code)
 internal/server/   console daemon and API
 internal/desk/      review desks: poll, claim, briefs, records, plans, publishing, the session's command guard
 internal/forge/     GitLab through glab (and forgetest, a fake glab for tests)
+internal/incident/  incident cases: the case folder, evidence files and hashes, report rendering, briefs
 internal/plugins/  plugin registry, the security-audit skill as a required plugin, preflight, validators, check tools
 internal/sandbox/  bubblewrap sandbox for target code, check tools and validators
 internal/auditreport/  audit report (markdown, print HTML, PDF), approval, verification
@@ -67,6 +68,16 @@ Agents read GitLab with a read-only identity and write records; lacarta posts wh
 (shadow by default) allow, and the user publishes the rest from the console. It never merges. Both identities are glab
 config folders inside this environment's own config folder. Design and status: [`docs/design/pr-review.md`](docs/design/pr-review.md).
 `internal/cli/desk_test.go` drives whole desks against a fake GitLab (the test binary acts as `glab`).
+
+## Incident response
+
+An incident case follows the response to one security incident or one vulnerability: `lacarta incident init --folder
+<case> --severity <level> [--type vulnerability]` opens it, `lacarta incident guide` is what the coordinator agent follows.
+The case keeps a timeline, investigations with their conclusions, evidence (copied into `evidence/`, read-only, hashed),
+indicators, response actions, and the reports drafted from that record into `reports/`: situation reports along the way,
+then the final report. The user is the lead: an agent carries out no action before the lead approved it in the console,
+and no report is issued without them. Report templates are the case's `templates/sitrep.md` and `templates/final.md`.
+Design and status: [`docs/design/incident-response.md`](docs/design/incident-response.md).
 
 ## Configuration
 

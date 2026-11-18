@@ -128,9 +128,11 @@ func dropAuditKind(hub any) {
 	cat := h["catalog"].(map[string]any)
 	delete(cat["kinds"].(map[string]any), "audit")
 	delete(cat["kinds"].(map[string]any), "desk")
+	delete(cat["kinds"].(map[string]any), "incident")
 	cat["planned"] = append([]any{"Security audit"}, cat["planned"].([]any)...)
 	delete(h["settings"].(map[string]any)["models"].(map[string]any), "audit")
 	delete(h["settings"].(map[string]any)["models"].(map[string]any), "desk")
+	delete(h["settings"].(map[string]any)["models"].(map[string]any), "incident")
 	delete(h["settings"].(map[string]any), "config")
 	delete(h, "tools")
 	for _, p := range h["projects"].([]any) {

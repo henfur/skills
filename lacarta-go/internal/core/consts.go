@@ -131,6 +131,10 @@ var Kinds = []Kind{
 	{Desk, "Review desk",
 		"Watches merge requests on a forge and reviews them on a loop: one reviewer per profile (security, devops, code), " +
 			"comments from your templates, approvals only as the desk's policy and modes allow. Never merges.", DeskRoles},
+	{Incident, "Incident response",
+		"One case, a security incident or a vulnerability to respond to: its timeline, investigations, evidence, indicators " +
+			"and response actions, with situation reports along the way and a final report. You approve every action and every report.",
+		IncidentRoles},
 }
 
 var PlannedKinds = []string{"DevOps (Ansible, Terraform)"}

@@ -100,6 +100,15 @@ mode (shadow by default, set in the desk's `config.json`) and an action policy. 
 **Open security item O-3** (design doc §13): agents run as the same OS user as the publisher, so the write identity
 isn't isolated from them. The user chose to record it and not act now; proposed fix: a separate OS user for publishing.
 
+## Phase 7: the incident-response kind
+
+**First version implemented (2026-11-18), not committed:** [`lacarta-go/docs/design/incident-response.md`](../lacarta-go/docs/design/incident-response.md).
+One case per folder, for a security incident or a vulnerability to respond to: timeline, investigations (with a
+challenger for confirmed conclusions), evidence with hashes, indicators, response actions approved by the lead in the
+console, situation reports along the way and a final report that closes the case. Kind id `incident`, commands
+`lacarta incident …`. The design doc lists the gates, four decisions taken without asking and what is left. Go tests
+and the 18 Playwright tests pass; the golden recordings did not move. **The binary in `~/.local/bin` is not rebuilt.**
+
 ## Later improvements: report provenance
 
 Both are parked by the user for later. They build on the security-audit design's §4.8 (AI-assistance disclosure and provenance);

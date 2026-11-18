@@ -31,6 +31,7 @@ type State struct {
 	Plugins   map[string]*ProjectPlugin `json:"plugins,omitempty"` // enabled per project; see internal/plugins
 	Audit     *AuditState               `json:"audit,omitempty"`
 	Desk      *DeskState                `json:"desk,omitempty"`
+	Incident  *IncidentState            `json:"incident,omitempty"`
 
 	// Where the state was read from: the project's folder and its state folder (config.json).
 	Root string `json:"-"`
@@ -299,5 +300,8 @@ func Where(p PhaseRef) string {
 
 func ptr[T any](v T) *T { return &v }
 
-// sameItem: a desk's publish questions are one per merge request; its content question is one at a time.
-func sameItem(e, o *Effect) bool { return e.Type == "desk-content" || e.Item == o.Item }
+// sameItem: a desk's publish questions are one per merge request; its content question, and a case's
+// severity question, are one at a time.
+func sameItem(e, o *Effect) bool {
+	return e.Type == "desk-content" || e.Type == "incident-severity" || e.Item == o.Item
+}

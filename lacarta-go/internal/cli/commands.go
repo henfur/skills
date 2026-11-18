@@ -148,7 +148,7 @@ func commands() []*Cmd {
 		{Name: "final start", Run: cmdFinalStart},
 		{Name: "final complete", Run: cmdFinalComplete, Opts: []Opt{{Name: "summary"}}},
 	}
-	return append(append(append(cmds, auditCommands()...), deskCommands()...), configCommands()...)
+	return append(append(append(append(cmds, auditCommands()...), deskCommands()...), incidentCommands()...), configCommands()...)
 }
 
 // Main runs the command line and returns the exit code.
@@ -431,6 +431,9 @@ func cmdStatus(a *Args) error {
 	}
 	if st.Template == core.Audit {
 		return auditStatus(a, st, d)
+	}
+	if st.Template == core.Incident && st.Incident != nil {
+		return incidentStatus(a, st, d)
 	}
 	if st.Template == core.Single {
 		a.Printf("%s: single-agent task in %s, %s\n", st.Project.Name, st.Project.Cwd, st.Stage)
@@ -1143,6 +1146,10 @@ func cmdAnswer(a *Args) error {
 		if q, err := core.GetQuestion(st, id); err == nil && q.Effect != nil && strings.HasPrefix(q.Effect.Type, "desk-") {
 			return core.Gate("%s is answered in the console only: publishing under the desk's identity, and accepting the "+
 				"desk's content, are the user's own decisions.", id)
+		}
+		if q, err := core.GetQuestion(st, id); err == nil && q.Effect != nil && strings.HasPrefix(q.Effect.Type, "incident-") {
+			return core.Gate("%s is answered in the console only: actions, the severity and reports are the lead's own "+
+				"decisions, and evidence can carry text that asks an agent to approve one.", id)
 		}
 		_, err := core.AnswerQuestion(st, id, a.Str("choice"), a.Str("comment"), "user (terminal)")
 		return err

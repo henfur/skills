@@ -536,3 +536,17 @@ func TestAFolderKeepsItsProject(t *testing.T) {
 		t.Errorf("software copy: %s, config %s", c, configIDOf(t, pcp))
 	}
 }
+
+func TestIncidentAsk(t *testing.T) {
+	for _, s := range []string{"We've been hacked, help", "start an incident for the mail outage", "I'm responding to a vulnerability in our gateway",
+		"need to respond to CVE-2026-1234", "incident response for the phishing wave"} {
+		if !incidentAsk.MatchString(s) {
+			t.Errorf("no incident hint for %q", s)
+		}
+	}
+	for _, s := range []string{"fix the login bug", "add an incident table to the schema", "review this merge request"} {
+		if incidentAsk.MatchString(s) {
+			t.Errorf("incident hint for %q", s)
+		}
+	}
+}

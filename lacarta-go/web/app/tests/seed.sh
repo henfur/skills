@@ -95,7 +95,23 @@ JSON
 D desk submit "$RUN/code.json" --item 'acme/billing!7' --profile code > /dev/null
 D desk done 'acme/billing!7' > /dev/null
 
-printf '{"task":"%s","done":"%s","shop":"%s","audit":"%s","desk":"%s","lacarta":"%s","home":"%s","shopRoot":"%s","gitlab":"%s"}\n' \
-  "$TASK" "$DONE" "$SHOP" "$AUDIT" "$DESK" "$L" "$LACARTA_HOME" "$RUN/shop" "$LACARTA_FAKE_GLAB" > "$RUN/ids.json"
+# An incident case: a timeline, an investigation, an action and a situation report waiting for the lead.
+CASE=$("$L" incident init --folder "$RUN/case" --name "Phished mailbox" --severity medium --affected mail | sed -n 's/^Case \([a-z0-9-]*\) opened in .*/\1/p')
+C() { "$L" --project "$CASE" "$@"; }
+C incident evidence add --title "Mail gateway log" --kind log --source mx1 --text "09:02 delivered invoice.html to j.doe" > /dev/null
+C incident timeline add --at "2026-11-18 09:02" --text "Phishing mail delivered to j.doe" --evidence EV-1 --mark occurred > /dev/null
+C incident timeline add --at "2026-11-18 09:30" --text "User reported the mail" --source j.doe --mark detected > /dev/null
+C incident timeline add --at "2026-11-18 09:10" --text "Credentials entered on the page" --suspected > /dev/null
+C incident investigation open --title "Were the credentials used?" --hypothesis "Logins from a new address" > /dev/null
+C incident investigation note INV-1 --text "Sign-in log requested from the identity team." > /dev/null
+C incident indicator add --type url --value "https://login.example.net/x" --context "phishing page" > /dev/null
+C incident note situation --text "One mailbox was phished at 09:02. Whether the password was used is under investigation." > /dev/null
+C incident note next-steps --text "Read the sign-in log; reset the password once approved." > /dev/null
+C incident action propose --kind containment --title "Reset the password of j.doe" --detail "Reset the password and revoke every session of j.doe in the IdP." \
+  --risk "The user is logged out everywhere." > /dev/null
+C incident report sitrep > /dev/null
+
+printf '{"task":"%s","done":"%s","shop":"%s","audit":"%s","desk":"%s","case":"%s","caseRoot":"%s","lacarta":"%s","home":"%s","shopRoot":"%s","gitlab":"%s"}\n' \
+  "$TASK" "$DONE" "$SHOP" "$AUDIT" "$DESK" "$CASE" "$RUN/case" "$L" "$LACARTA_HOME" "$RUN/shop" "$LACARTA_FAKE_GLAB" > "$RUN/ids.json"
 unset LACARTA_NO_DAEMON
 exec "$L" serve --port "${PORT:-4799}"

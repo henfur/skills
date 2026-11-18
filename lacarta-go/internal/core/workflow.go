@@ -224,6 +224,9 @@ func NextAction(st *State, s *Store) (string, error) {
 	if st.Template == Desk && st.Desk != nil {
 		return DeskNext(st), nil
 	}
+	if st.Template == Incident && st.Incident != nil {
+		return IncidentNext(st), nil
+	}
 	if st.Template == Single {
 		if stage == "ended" {
 			return "The session ended.", nil
@@ -362,6 +365,7 @@ type Derived struct {
 	PhasesDone      *int              `json:"phases_done,omitempty"`
 	Audit           *AuditDerived     `json:"audit,omitempty"`
 	Desk            *DeskDerived      `json:"desk,omitempty"`
+	Incident        *IncidentDerived  `json:"incident,omitempty"`
 }
 
 func DeriveState(st *State, s *Store) (*Derived, error) {
@@ -383,6 +387,10 @@ func DeriveState(st *State, s *Store) (*Derived, error) {
 	}
 	if st.Template == Desk && st.Desk != nil {
 		d.Desk = DeriveDesk(st)
+		return d, nil
+	}
+	if st.Template == Incident && st.Incident != nil {
+		d.Incident = DeriveIncident(st)
 		return d, nil
 	}
 	if b := BlockedReason(st); b != "" {

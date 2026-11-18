@@ -28,6 +28,7 @@ import (
 	"lacarta/internal/core"
 	"lacarta/internal/desk"
 	"lacarta/internal/hooks"
+	"lacarta/internal/incident"
 	"lacarta/internal/plugins"
 	"lacarta/web"
 )
@@ -142,7 +143,7 @@ func activeProject(out *projectSummary, st *core.State) bool {
 		return true
 	}
 	if st.Template != core.Single {
-		return st.Stage != "done" && st.Stage != "stopped"
+		return st.Stage != "done" && st.Stage != "stopped" && st.Stage != "closed"
 	}
 	seen, err := time.Parse(time.RFC3339, out.LastSeen)
 	return out.Session && err == nil && core.Clock().Sub(seen) < IdleAfter
@@ -223,6 +224,7 @@ type projectPayload struct {
 	Chat    []hooks.ChatItem    `json:"chat"`
 	Audit   *auditPayload       `json:"audit,omitempty"`
 	Desk    *deskPayload        `json:"desk,omitempty"`
+	Case    *casePayload        `json:"case,omitempty"`
 	Config  *core.ProjectConfig `json:"config,omitempty"` // the project's config.json, when it has one
 }
 
@@ -314,6 +316,9 @@ func payload(pid string) (*projectPayload, error) {
 	}
 	if st.Template == core.Desk && st.Desk != nil {
 		out.Desk = deskData(pid, st)
+	}
+	if st.Template == core.Incident && st.Incident != nil {
+		out.Case = caseData(st)
 	}
 	if pc := core.ProjectConfigRead(st); pc.Exists {
 		out.Config = pc
@@ -670,6 +675,8 @@ func post(w http.ResponseWriter, r *http.Request, token string) {
 				}
 				core.DeskCheckContent(st)
 			}
+		case "incident-report-edit":
+			err = incident.EditDraft(st, str("id", 0), str("text", 60_000))
 		case "desk-pause":
 			if st.Desk == nil {
 				return errNotFound
@@ -875,6 +882,29 @@ func EnsureDaemon(self string) *core.DaemonInfo {
 		}
 	}
 	return nil
+}
+
+// casePayload is what an incident case's views need beyond the state: the text of its reports, and
+// whether each file is still what lacarta wrote or the lead issued.
+type casePayload struct {
+	Reports map[string]*caseReport `json:"reports"`
+}
+
+type caseReport struct {
+	Text string `json:"text"`
+	OK   bool   `json:"ok"`
+}
+
+func caseData(st *core.State) *casePayload {
+	out := &casePayload{Reports: map[string]*caseReport{}}
+	for _, r := range st.Incident.Reports {
+		if r.Status == "superseded" {
+			continue
+		}
+		text, ok := incident.ReadReport(st, r)
+		out.Reports[r.ID] = &caseReport{Text: text, OK: ok}
+	}
+	return out
 }
 
 // deskPayload is what the review desk's views need beyond the state: each recent merge request

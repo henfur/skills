@@ -32,7 +32,14 @@ export const TONE = {
   accepted: "accent", "wont-fix": "", draft: "", planned: "", stopped: "danger", changed: "warning",
   passed: "success", failed: "danger", stale: "warning", none: "",
   specification: "info", implementation: "brand", "final-review": "accent",
+  // Incident response: the case, its investigations, actions and reports.
+  active: "info", closed: "success", confirmed: "success", refuted: "", inconclusive: "warning", parked: "",
+  proposed: "brand", rejected: "danger", cancelled: "", issued: "success", superseded: "", suspected: "warning", retired: "",
 };
+// Addresses are shown so that nothing turns them into a link (the stored value is the real one).
+export const defang = (type, v) => ["ip", "domain", "url", "email"].includes(type)
+  ? String(v).replace(/^http(s?):\/\//i, "hxxp$1://").replace(/\./g, "[.]").replace(/@/g, "[@]") : String(v);
+export const utc = iso => iso ? iso.replace("T", " ").replace(/:\d\dZ$/, "") + " UTC" : "";
 export const sevTone = s => s === "critical" ? "critical" : s === "high" ? "danger" : s === "medium" ? "warning" : s === "low" ? "info" : "";
 
 export const AGENT_STATUS = {
@@ -59,6 +66,8 @@ export const AGENT_GROUPS = [
   ["Developers", ["implementation"]],
   ["Reviewers", ["spec_review", "functional_review", "security_review"]],
   ["Final reviewers", ["final_functional_review", "final_security_review"]],
+  ["Investigators", ["investigator"]],
+  ["Challengers", ["challenger"]],
 ];
 // Within a group: whoever needs you first, then the busy ones, then the finished ones.
 export const STATUS_ORDER = ["waiting", "terminal", "blocked", "listening", "working", "idle", "failed", "done"];
