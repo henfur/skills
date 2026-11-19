@@ -194,7 +194,7 @@ func sessionContext(pid string, s *core.Store) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	url := "not running (start it with `serve`)"
+	url := "not running: ask the user to run `lacarta serve` (do not start it yourself)"
 	if info := core.DaemonRead(); info != nil {
 		url = info.OpenURL
 	}

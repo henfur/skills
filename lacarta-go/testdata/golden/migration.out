@@ -1,7 +1,7 @@
 $ init --name legacy
 Initialised <W>/.lacarta as project legacy-<ID>
 Spec templates: <W>/.lacarta/specs
-Console: not running; start it with `serve`
+Console: not running: ask the user to run `lacarta serve` (do not start it yourself)
 Next: tell the user the console URL, then ask what the project is (unless they already said).
 [exit 0]
 

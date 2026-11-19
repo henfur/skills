@@ -379,11 +379,11 @@ func TestAuth(t *testing.T) {
 	if resp, _ := http.DefaultClient.Do(req); resp.StatusCode != 200 {
 		t.Errorf("api with key: %d", resp.StatusCode)
 	}
-	if resp, _ := http.Get(keyed.URL + "/vendor/marked.min.js"); resp.StatusCode != 200 {
-		t.Errorf("vendored scripts need no key: %d", resp.StatusCode)
-	}
-	if resp, _ := http.Get(srv.URL + "/vendor/../../etc/passwd"); resp.StatusCode == 200 {
+	if resp, _ := http.Get(srv.URL + "/assets/../../etc/passwd"); resp.StatusCode == 200 {
 		t.Error("path traversal")
+	}
+	if resp, _ := http.Get(srv.URL + "/legacy/"); resp.StatusCode == 200 {
+		t.Error("the prototype's page is gone")
 	}
 }
 
@@ -416,12 +416,6 @@ func TestPageHasToken(t *testing.T) {
 	}
 	if r, _ := http.Get(srv.URL + "/assets/nope.js"); r.StatusCode != 404 {
 		t.Fatal("unknown asset")
-	}
-	// The prototype's page stays reachable, with its own token and the inline-script CSP it needs.
-	l, _ := http.Get(srv.URL + "/legacy/")
-	lb, _ := io.ReadAll(l.Body)
-	if !strings.Contains(string(lb), `const TOKEN = "`+token+`"`) || !strings.Contains(l.Header.Get("Content-Security-Policy"), "'unsafe-inline'") {
-		t.Fatal("legacy page")
 	}
 }
 

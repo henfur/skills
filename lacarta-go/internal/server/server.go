@@ -368,13 +368,12 @@ func NewConsole(c Config) *Console {
 func (con *Console) Close() { con.events.close() }
 
 // The Svelte build has no inline script (the token comes in a <meta> tag), so scripts are
-// limited to the page's own files. The prototype's page, at /legacy/, still needs inline scripts.
+// limited to the page's own files.
 const (
 	cspBase = "default-src 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 		"font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; base-uri 'none'; " +
 		"form-action 'none'; frame-ancestors 'none'; "
-	cspApp    = cspBase + "script-src 'self'"
-	cspLegacy = cspBase + "script-src 'self' 'unsafe-inline'"
+	cspApp = cspBase + "script-src 'self'"
 )
 
 func (con *Console) keyOK(v string) bool {
@@ -471,22 +470,6 @@ func (con *Console) get(w http.ResponseWriter, r *http.Request) {
 		if t := mime.TypeByExtension(filepath.Ext(name)); t != "" {
 			w.Header().Set("Content-Type", t)
 		}
-		_, _ = w.Write(b)
-		return
-	}
-	if path == "/legacy" || path == "/legacy/" {
-		con.page(w, r, web.Legacy, "legacy/index.html", cspLegacy)
-		return
-	}
-	if strings.HasPrefix(path, "/vendor/") {
-		b, err := web.Legacy.ReadFile("legacy" + path)
-		if err != nil || strings.Contains(path, "..") {
-			fail(w, 404, "Not found.")
-			return
-		}
-		// Vendored libraries never change for a given release; everything else is live state.
-		w.Header().Set("Cache-Control", "private, max-age=86400")
-		w.Header().Set("Content-Type", "text/javascript")
 		_, _ = w.Write(b)
 		return
 	}

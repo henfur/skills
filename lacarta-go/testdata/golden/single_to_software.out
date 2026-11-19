@@ -5,7 +5,7 @@ Q-1
 $ --root app init --name "App"
 Initialised <W>/app/.lacarta as project app-<ID>
 Spec templates: <W>/app/.lacarta/specs
-Console: not running; start it with `serve`
+Console: not running: ask the user to run `lacarta serve` (do not start it yourself)
 Next: tell the user the console URL, then ask what the project is (unless they already said).
 [exit 0]
 

@@ -62,7 +62,7 @@ Out of scope for now: other agent CLIs (Codex, Gemini: an adapter interface is p
   - [x] golden: `single_to_software`.
 
 ### FR-6: Archive
-- Priority: should. Status: **done** (API and legacy page).
+- Priority: should. Status: **done** (API and console).
 - The user archives and restores projects from the home page; archived projects leave the sidebar, the counts and the notifications.
 
 ### Questions
@@ -74,7 +74,7 @@ Out of scope for now: other agent CLIs (Codex, Gemini: an adapter interface is p
   - [x] An answer outside the options is refused with `Choose one of ['A', 'B'] or write an answer.` (golden: `software_flow`).
 
 ### FR-8: Talk about this
-- Priority: must. Status: **done** (core, API, CLI, legacy page).
+- Priority: must. Status: **done** (core, API, CLI, console).
 - Every open question offers "Talk about this": the user writes to the agent instead of answering; the question stays open. The agent replies with `reply Q-n --message ...` and may rewrite the question (`--body`, and `--option` only on questions without an effect: approvals and triage options drive the framework and can't change). While the user spoke last, `next` tells the agent to reply.
 - Acceptance criteria:
   - [x] `reply` on an answered question is refused (golden: `software_flow`); changing options of an effect question is refused (Python-era tests; port a golden case if touched).
@@ -146,13 +146,13 @@ Stages: `specification` → `implementation` → `final-review` → `done`; `sto
   - [x] `hooks_test.go` (Stop: delivery, asking for a listener once, not blocking with one; listen: message, answer, Talk, remote off, takeover, timeout, SIGTERM; dead pid); golden `hooks` (delivery).
 
 ### FR-19: Chat transcript
-- Priority: must. Status: **done** (reader, API, legacy page).
+- Priority: must. Status: **done** (reader, API, console).
 - The console shows A-1's Claude Code transcript: the user's and the agent's text, one line per tool call (name and its description, command, file path, pattern, URL or prompt, 240 characters), skipping sidechains, meta entries, CLI plumbing and console messages (shown from the inbox with queued/delivered state instead). The last 400 items. Only `.jsonl` files inside `~/.claude` (or `$CLAUDE_CONFIG_DIR`) are read.
 - Acceptance criteria:
   - [x] `hooks_test.go: TestReadChat, TestTranscriptOutsideClaudeIsRefused`.
 
 ### FR-20: Console views
-- Priority: must. Status: **done** (Svelte, `web/app/`; Playwright: `web/app/tests/console.spec.js`). The legacy page `web/legacy/index.html` was the reference and stays at `/legacy/` until removed.
+- Priority: must. Status: **done** (Svelte, `web/app/`; Playwright: `web/app/tests/console.spec.js`). The prototype's page it replaced was removed on 2026-11-19.
 - Routes: `#/` home, `#/settings`, `#/p/<id>/<view>`.
 - Home: "Waiting for you" (every open question and terminal prompt across projects), active projects as cards (name, kind, agent, last activity, path, blocked reason, terminal prompt, moved-to link, Answer/Open button, Archive for ended tasks), archived projects behind a toggle.
 - Sidebar: All projects (total open questions), Settings, then active projects sorted by last activity with a status dot, kind and open-question count. On narrow screens it becomes a horizontal strip.

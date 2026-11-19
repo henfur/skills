@@ -29,7 +29,7 @@ The CLI, the hooks and the daemon are the same binary. They never talk to each o
 | Core | `internal/core` | State types, store (locking, atomic writes, migration), hub, settings, daemon info, questions and effects, inbox, software gates, derived state and next action, sessions, Python-compatible formatting |
 | Hooks | `internal/hooks` | Hook events, transcript reader, `install` for Claude Code |
 | Server | `internal/server` | Console daemon: HTTP API, auth, page and vendored files, `Serve`, `EnsureDaemon` |
-| Web | `web` | Embedded console: `dist/`, built from the Svelte app in `app/`; `legacy/`, the prototype's page, until it is removed |
+| Web | `web` | Embedded console: `dist/`, built from the Svelte app in `app/` |
 | Skill | `skill` | Embedded files for agents. Now: spec templates. Phase 4: the whole skill |
 | Parity suite | `internal/golden` | Replays scenarios against Go or the prototype and compares with recordings |
 
@@ -125,7 +125,6 @@ Base: `http://127.0.0.1:4747/` by default. All JSON responses `application/json;
 | Method, path | Request | Response |
 | --- | --- | --- |
 | GET `/` (`?key=` when exposed) | | the console page; the literal `__LACARTA_TOKEN__` (in `<meta name="lacarta-token">`) replaced by the token; served from `LACARTA_WEB_DIR` instead of the embedded build when set |
-| GET `/vendor/{marked,purify,mermaid}.min.js` | | JavaScript, cached a day, no key needed |
 | GET `/api/hub` | | `{projects: [Summary], settings: Settings, catalog: Catalog}` |
 | GET `/api/p/{id}/state` | | `{id, state: State, derived: Derived, specs?: {kind: markdown}, reports?: {R-n: markdown}, chat: [ChatItem]}` (`specs`/`reports` for software projects, even when empty) |
 | POST `/api/p/{id}/answer` | `{id, choice, comment}` | `{ok, result: Question}` |
@@ -136,7 +135,6 @@ Base: `http://127.0.0.1:4747/` by default. All JSON responses `application/json;
 | POST `/api/settings` | `{models?: {kind: {role: alias}}, remote_control?: bool}` | `{ok, settings}` |
 | GET `/api/events` (`?key=` when exposed: EventSource sends no headers) | | server-sent events: `hub` (any change) and `project` (data: its id), `retry: 2000`, a ping comment every 25 s |
 | GET `/assets/*` | | the console's built files, cached for a year (content-hashed names) |
-| GET `/legacy/` | | the prototype's page, until removed |
 
 Status codes: 200; 400 malformed; 405 other methods; 403 host, origin, token or key; 404 unknown path, project or action; 409 a gate refused (the gate's words); 413 body over 64 KB; 415 not JSON; 500 unreadable state. Text fields are capped (comment and messages at 20,000 characters).
 
@@ -247,7 +245,6 @@ lacarta-go/
 ├── skill/                 embedded skill files (templates now)
 ├── web/app/               console source (Svelte), Playwright tests
 ├── web/dist/              its build (committed, embedded)
-├── web/legacy/            the prototype's page (until removed)
 ├── testdata/scenarios/    parity scenarios
 ├── testdata/golden/       recordings (the behavioural spec)
 └── docs/specs/            these specs

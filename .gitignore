@@ -1,0 +1,10 @@
+# Build outputs: `go build` writes the binary next to the module.
+/lacarta-go/lacarta
+__pycache__/
+*.pyc
+
+# The console's dependencies and test runs.
+node_modules/
+/lacarta-go/web/app/tests/.run/
+/lacarta-go/web/app/test-results/
+/lacarta-go/web/app/playwright-report/

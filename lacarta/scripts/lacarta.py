@@ -954,7 +954,7 @@ def hook_print(event, context=None, block=None):
 def session_context(pid, store):
     state = store.read()
     info = daemon_info()
-    url = info["open_url"] if info else "not running (start it with `serve`)"
+    url = info["open_url"] if info else "not running: ask the user to run `lacarta serve` (do not start it yourself)"
     L = f"python3 {Path(__file__).resolve()}"
     kind = KINDS[state["template"]]["label"].lower()
     lines = [f"lacarta: this session is registered in the lacarta console ({url}) as the {kind} project "
@@ -1199,7 +1199,7 @@ def cmd_init(args):
         move_session(sid, pid, Store(root))
     info = ensure_daemon()
     print(f"Initialised {d} as project {pid}\nSpec templates: {d / 'specs'}\n"
-          f"Console: {info['open_url'] if info else 'not running; start it with `serve`'}\n"
+          f"Console: {info['open_url'] if info else 'not running: ask the user to run `lacarta serve` (do not start it yourself)'}\n"
           "Next: tell the user the console URL, then ask what the project is (unless they already said).")
 
 

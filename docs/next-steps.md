@@ -14,11 +14,11 @@ Written 2026-11-12, for the agent taking over the Go port. Read in this order:
 | 0. Check Claude Code assumptions | Mostly settled; two unknowns have fallbacks (see the plan's table) |
 | 1. State, gates, CLI in Go | Done |
 | 2. Hooks, install, daemon API in Go | Done |
-| 3. Svelte console | Done, except removing the legacy page after the user has checked the new one |
+| 3. Svelte console | Done; the legacy page was removed on 2026-11-19 |
 | 4. Skill split, releases, retire Python | **Next** |
 | 5. `Kind` interface + security-audit kind | After 4 |
 
-- `lacarta-go/` is a complete replacement for the Python prototype `lacarta/scripts/lacarta.py`: same commands, hooks, API and state files. Its console is the prototype's page, embedded unchanged from `lacarta-go/web/legacy/`.
+- `lacarta-go/` is a complete replacement for the Python prototype `lacarta/scripts/lacarta.py`: same commands, hooks, API and state files. Its console is the Svelte app in `lacarta-go/web/app/`.
 - **Committed** as `99798da` ("rewrite the lacarta program and cli in go"). Since then, only the docs have changed (this file, the plan, the Go README, `lacarta-go/docs/`). Commit only when the user asks.
 - **The user's machine runs the Go binary**: `~/.local/bin/lacarta`, with hooks in `~/.claude/settings.json` pointing at it and the console on `127.0.0.1:4747`. Every Claude Code session on the machine, including yours, goes through it. A broken build installed there breaks the user's sessions, so test with `go test ./...` and a scratch home before replacing that binary, and only replace it when the user asks.
 
@@ -46,7 +46,7 @@ go vet ./... && go test ./...          # all green at handoff
 Built in `lacarta-go/web/app/` (Svelte 5.57, Vite 6.4, built with Bun 1.4 from nixpkgs), output committed in `web/dist/` and embedded, so `go build` needs no Bun. What changed, beyond porting every view:
 
 - **Same look**: `src/app.css` is the legacy page's stylesheet, unchanged, plus a short "Fixes" block at the end. Components emit the same markup and classes.
-- **Token in `<meta name="lacarta-token">`**: the page has no inline script, so `/` is served with `script-src 'self'` (the legacy page keeps its own CSP at `/legacy/`).
+- **Token in `<meta name="lacarta-token">`**: the page has no inline script, so `/` is served with `script-src 'self'`.
 - **Live updates**: `GET /api/events` (`internal/server/events.go`): a watcher compares state-file modification times every 500 ms while someone is subscribed and sends `hub` and `project` events; the key may come as `?key=` because EventSource sends no headers. The page re-fetches on each event and polls every 15 s while the stream is healthy, every 2.5 s otherwise.
 - **Fixed on the way**: drafts are keyed by project and question (question ids repeat across projects); a long session folder no longer widens the chat at phone width; the page no longer fetches the state of a project the hub doesn't list.
 - **Development**: `LACARTA_WEB_DIR=web/dist lacarta serve --port 4799` (scratch `LACARTA_HOME`) serves the build from disk; `bun run build --watch` in `web/app/` then needs no Go rebuild.
@@ -62,7 +62,7 @@ Built in `lacarta-go/web/app/` (Svelte 5.57, Vite 6.4, built with Bun 1.4 from n
 
 **Left to do:**
 1. **The user checks the new console** in their own browser (a rebuilt binary on their machine, or a scratch daemon). The automated tests ran Chromium only: Firefox and Safari are unchecked, and nobody has looked at it with human eyes yet.
-2. Then **remove the legacy page**: delete `web/legacy/`, the `Legacy` embed, the `/legacy/` and `/vendor/` routes and `cspLegacy` in `internal/server/server.go`, and the legacy assertions in `TestPageHasToken` / `TestAuth` (vendored scripts). `web/legacy/index.html` is still the reference for behaviour until then.
+2. ~~Remove the legacy page~~: done 2026-11-19 (`web/legacy/`, its embed, the `/legacy/` and `/vendor/` routes and `cspLegacy` are gone).
 
 ## Phase 4: skill split, releases, retire Python
 

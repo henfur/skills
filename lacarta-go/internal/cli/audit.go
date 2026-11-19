@@ -196,7 +196,7 @@ func cmdAuditInit(a *Args) error {
 			return err
 		}
 	}
-	console := "not running; start it with `serve`"
+	console := "not running: ask the user to run `lacarta serve` (do not start it yourself)"
 	if info := server.EnsureDaemon(self()); info != nil {
 		console = info.OpenURL
 	}
