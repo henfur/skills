@@ -22,16 +22,20 @@ cat > "$T" <<'JSONL'
 {"type":"user","message":{"content":"Fix the login bug"},"timestamp":"2026-11-12T01:00:00Z"}
 {"type":"assistant","message":{"content":[{"type":"text","text":"Looking at **auth.py**."},{"type":"tool_use","name":"Bash","input":{"command":"grep -rn login","description":"Search login code"}},{"type":"tool_use","name":"Read","input":{"file_path":"auth.py"}}]},"timestamp":"2026-11-12T01:00:05Z"}
 JSONL
+# Sessions stay out of the console until asked: the agent runs `track` with the session's variables.
+track() { (cd "$1" && LACARTA_SESSION="$2" LACARTA_TRANSCRIPT="${3:-}" "$L" track | sed -n 's/.*(\(t-[0-9a-f]*\)).*/\1/p' | head -1); }
 echo "{\"session_id\":\"s1\",\"cwd\":\"$WORK/login-fix\",\"transcript_path\":\"$T\"}" | CLAUDE_ENV_FILE="$RUN/env1" "$L" hook session-start > /dev/null
+TASK=$(track "$WORK/login-fix" s1 "$T")
 echo '{"session_id":"s1","prompt":"Fix the login bug"}' | "$L" hook prompt
-TASK=$(sed -n 's/^export LACARTA_PROJECT=//p' "$RUN/env1")
 "$L" --project "$TASK" ask --title "Which fix?" --option "Patch|Small change, quick to review" --option "Rewrite|Cleaner, takes a day" > /dev/null
 
 # An ended task, which can be archived.
 echo "{\"session_id\":\"s3\",\"cwd\":\"$WORK/done-task\"}" | CLAUDE_ENV_FILE="$RUN/env3" "$L" hook session-start > /dev/null
+DONE=$(track "$WORK/done-task" s3)
 echo '{"session_id":"s3","reason":"exit"}' | "$L" hook session-end
-DONE=$(sed -n 's/^export LACARTA_PROJECT=//p' "$RUN/env3")
 # An ended task that did something: listed under Inactive (the one above is an empty session).
+# Its folder was tracked from a terminal beforehand, so its session joins on its own.
+(cd "$WORK/notes" && "$L" track > /dev/null)
 echo "{\"session_id\":\"s4\",\"cwd\":\"$WORK/notes\"}" | CLAUDE_ENV_FILE="$RUN/env4" "$L" hook session-start > /dev/null
 echo '{"session_id":"s4","prompt":"Write the release notes"}' | "$L" hook prompt
 echo '{"session_id":"s4","reason":"exit"}' | "$L" hook session-end

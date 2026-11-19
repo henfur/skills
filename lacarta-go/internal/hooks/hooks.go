@@ -122,7 +122,8 @@ func register(p *Payload) (string, *core.Store, error) {
 	return core.RegisterSession(p.SessionID, cwdOf(p), p.TranscriptPath, p.Source)
 }
 
-// sessionStore finds the session's project; hooks installed mid-session register on first contact.
+// sessionStore finds the session's project; hooks installed mid-session register on first contact,
+// in a tracked folder. nil: the session isn't in the console, and the hook has nothing to do.
 func sessionStore(p *Payload) (*core.Store, error) {
 	h, err := core.HubRead()
 	if err != nil {
@@ -133,8 +134,59 @@ func sessionStore(p *Payload) (*core.Store, error) {
 			return s, nil
 		}
 	}
+	if !core.Tracked(cwdOf(p)) {
+		return nil, nil
+	}
 	_, s, err := register(p)
 	return s, err
+}
+
+// joins says whether a starting session goes into the console: one it already knows (a resumed
+// session added with `track`), or one in a tracked folder.
+func joins(p *Payload) bool {
+	if h, err := core.HubRead(); err == nil {
+		if _, ok := h.Sessions.Get(p.SessionID); ok {
+			return true
+		}
+	}
+	return core.Tracked(cwdOf(p))
+}
+
+// writeEnv sets the session's variables for its later Bash commands: `track` and the init
+// commands find the session (and its transcript) by them; pid "" for a session not in the console.
+func writeEnv(p *Payload, pid string) error {
+	env := os.Getenv("CLAUDE_ENV_FILE")
+	if env == "" {
+		return nil
+	}
+	f, err := os.OpenFile(env, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if pid != "" {
+		fmt.Fprintf(f, "export LACARTA_PROJECT=%s\n", shellQuote(pid))
+	}
+	_, err = fmt.Fprintf(f, "export LACARTA_SESSION=%s\nexport LACARTA_TRANSCRIPT=%s\n", shellQuote(p.SessionID), shellQuote(p.TranscriptPath))
+	return err
+}
+
+// untrackedContext: what a session outside the console is told. It joins only when the user asks;
+// the skills set for single-agent tasks still apply.
+func untrackedContext(cwd string) string {
+	ctx := fmt.Sprintf("lacarta is installed, but this session is not in the lacarta console, and it shouldn't be unless "+
+		"the user asks. If they ask to follow or steer this session from the console (or from their phone), run `%s track` "+
+		"and follow what it prints. If they ask to build a new project, app or service, or want specs or a structured, "+
+		"reviewed process, load the `lacarta` skill. %s", Self, auditHint())
+	if s := plugins.Instruction(plugins.ForSession(&core.State{Template: core.Single, Root: cwd})); s != "" {
+		ctx += "\n" + s
+	}
+	return ctx
+}
+
+// SessionContext: what a session in the console is told, at its start or when `track` adds it.
+func SessionContext(pid string, s *core.Store) (string, error) {
+	return sessionContext(pid, s)
 }
 
 func sessionContext(pid string, s *core.Store) (string, error) {
@@ -194,19 +246,21 @@ func sessionContext(pid string, s *core.Store) (string, error) {
 }
 
 func sessionStart(p *Payload, w io.Writer) error {
+	if !joins(p) {
+		if err := writeEnv(p, ""); err != nil {
+			return err
+		}
+		printContext(w, "SessionStart", untrackedContext(cwdOf(p)))
+		return nil
+	}
 	EnsureDaemon()
 	pid, s, err := register(p)
 	if err != nil {
 		return err
 	}
-	if env := os.Getenv("CLAUDE_ENV_FILE"); env != "" {
-		// Later Bash commands in this session resolve the project without a .lacarta/ folder.
-		f, err := os.OpenFile(env, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(f, "export LACARTA_PROJECT=%s\nexport LACARTA_SESSION=%s\n", shellQuote(pid), shellQuote(p.SessionID))
-		f.Close()
+	// Later Bash commands in this session resolve the project without a .lacarta/ folder.
+	if err := writeEnv(p, pid); err != nil {
+		return err
 	}
 	ctx, err := sessionContext(pid, s)
 	if err != nil {
@@ -237,17 +291,25 @@ func prompt(p *Payload, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	st, err := s.Read()
-	if err != nil {
-		return err
+	// An untracked session gets the same hints as a single-agent task: `audit init` and `incident init` add it.
+	single := s == nil
+	if s != nil {
+		st, err := s.Read()
+		if err != nil {
+			return err
+		}
+		single = st.Template == core.Single
 	}
-	if st.Template == core.Single && auditAsk.MatchString(p.Prompt) {
+	if single && auditAsk.MatchString(p.Prompt) {
 		printContext(w, "UserPromptSubmit", "lacarta: "+auditHint())
-	} else if st.Template == core.Single && incidentAsk.MatchString(p.Prompt) {
+	} else if single && incidentAsk.MatchString(p.Prompt) {
 		printContext(w, "UserPromptSubmit", fmt.Sprintf("lacarta: If the user is responding to a security incident or to a "+
 			"vulnerability that affects them, first run `%s incident init --folder <a new case folder> --severity <level> "+
 			"[--type vulnerability] --name \"<title>\"`: it opens a case in the console (timeline, investigations, evidence, "+
 			"actions, reports). Then follow `%s incident guide`. Ask the user for the folder and the severity if they didn't say.", Self, Self))
+	}
+	if s == nil {
+		return nil
 	}
 	return s.Edit(func(st *core.State) error {
 		st.Attention = nil
@@ -264,6 +326,9 @@ func postTool(p *Payload, w io.Writer) error {
 	s, err := sessionStore(p)
 	if err != nil {
 		return err
+	}
+	if s == nil {
+		return nil
 	}
 	st, err := s.Read()
 	if err != nil {
@@ -289,6 +354,9 @@ func notification(p *Payload, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if s == nil {
+		return nil
+	}
 	return s.Edit(func(st *core.State) error {
 		text := p.Message
 		if text == "" {
@@ -307,6 +375,9 @@ func stop(p *Payload, w io.Writer) error {
 	s, err := sessionStore(p)
 	if err != nil {
 		return err
+	}
+	if s == nil {
+		return nil
 	}
 	var msg string
 	var askListener bool
@@ -345,6 +416,9 @@ func sessionEnd(p *Payload, w io.Writer) error {
 	s, err := sessionStore(p)
 	if err != nil {
 		return err
+	}
+	if s == nil {
+		return nil
 	}
 	return s.Edit(func(st *core.State) error {
 		a := core.MustAgent(st, core.Orchestrator)

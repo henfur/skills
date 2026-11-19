@@ -54,3 +54,22 @@ test("the lead approves an action, then edits and issues a situation report", as
   await expect(rep.getByText("issued", { exact: true })).toBeVisible();
   expect(sitrep()).toContain("Reviewed by the lead.");
 });
+
+test("a report is copied, downloaded or printed alone", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(`/#/p/${ids().case}/reports`);
+  const card = page.locator("section.card", { hasText: "Situation report 1" }).first();
+  await card.getByRole("button", { name: "Situation report 1", exact: true }).click();
+  const text = sitrep();
+  await card.getByRole("button", { name: "Copy Markdown" }).click();
+  await expect(card.getByText("Copied.")).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(text);
+  const [dl] = await Promise.all([page.waitForEvent("download"), card.getByRole("button", { name: "Download .md" }).click()]);
+  expect(dl.suggestedFilename()).toBe("sitrep-001.md");
+  expect(readFileSync(await dl.path(), "utf8")).toBe(text);
+  await page.evaluate(() => { window.print = () => { window.printed = document.getElementById("print-root").textContent; }; });
+  await card.getByRole("button", { name: "Print / PDF" }).click();
+  const printed = await page.evaluate(() => window.printed);
+  expect(printed).toContain("Situation report 1");
+  expect(printed).not.toContain("Case narrative");   // the report alone, not the page
+});

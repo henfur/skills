@@ -69,7 +69,7 @@ func commands() []*Cmd {
 			{Name: "port", Kind: num, Help: "Default 4747."},
 			{Name: "host", Help: "Address to bind. Anything but loopback requires the key printed in the URL."},
 			{Name: "allow-host", Kind: list, Help: "Extra host name or IP the browser will use (LAN name, VPN IP); repeat."}}},
-		{Name: "install", Help: "Add the hooks that register every Claude Code session in the console.", Run: cmdInstall,
+		{Name: "install", Help: "Add the hooks that let Claude Code sessions join the console: those in tracked folders, and any you add with `track`.", Run: cmdInstall,
 			Opts: []Opt{{Name: "settings", Help: "Claude Code settings file (default: ~/.claude/settings.json)."},
 				{Name: "uninstall", Kind: flag, Help: "Remove the hooks instead."}}},
 		{Name: "hook", Help: "Called by the CLI's hooks, with its JSON on stdin.", Run: cmdHook,
@@ -149,7 +149,7 @@ func commands() []*Cmd {
 		{Name: "final start", Run: cmdFinalStart},
 		{Name: "final complete", Run: cmdFinalComplete, Opts: []Opt{{Name: "summary"}}},
 	}
-	return append(append(append(append(cmds, auditCommands()...), deskCommands()...), incidentCommands()...), configCommands()...)
+	return append(append(append(append(append(cmds, auditCommands()...), deskCommands()...), incidentCommands()...), configCommands()...), trackCommands()...)
 }
 
 // Main runs the command line and returns the exit code.
@@ -207,12 +207,12 @@ func run(a *Args) error {
 		return a.Cmd.Run(a)
 	}
 	if store == nil {
-		return core.Gate("No project here. `init` creates a software project in this folder; sessions register on " +
-			"their own once `install` has added the hooks.")
+		return core.Gate("No project here. `init` creates a software project in this folder; `track` adds this " +
+			"session (and the folder's next ones) to the console as a single-agent task.")
 	}
 	if _, err := os.Stat(store.Path()); err != nil {
-		return core.Gate("No project here. `init` creates a software project in this folder; sessions register on " +
-			"their own once `install` has added the hooks.")
+		return core.Gate("No project here. `init` creates a software project in this folder; `track` adds this " +
+			"session (and the folder's next ones) to the console as a single-agent task.")
 	}
 	group := strings.Fields(a.Cmd.Name)[0]
 	if softwareOnly[group] {
@@ -252,6 +252,14 @@ func resolveStore(a *Args) (*core.Store, error) {
 	}
 	if p := os.Getenv("LACARTA_PROJECT"); p != "" {
 		return core.ProjectStore(p)
+	}
+	// A session added with `track` after it started has no $LACARTA_PROJECT: the hub knows it.
+	if sid := os.Getenv("LACARTA_SESSION"); sid != "" {
+		if h, err := core.HubRead(); err == nil {
+			if pid, ok := h.Sessions.Get(sid); ok {
+				return core.ProjectStore(pid)
+			}
+		}
 	}
 	return nil, nil
 }
@@ -389,7 +397,7 @@ func cmdInit(a *Args) error {
 		return err
 	}
 	if sid := os.Getenv("LACARTA_SESSION"); sid != "" {
-		if err := core.MoveSession(sid, pid, core.SoftwareStore(root)); err != nil {
+		if err := core.MoveSession(sid, pid, core.SoftwareStore(root), os.Getenv("LACARTA_TRANSCRIPT")); err != nil {
 			return err
 		}
 	}

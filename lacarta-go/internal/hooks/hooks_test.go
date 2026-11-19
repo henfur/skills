@@ -461,7 +461,15 @@ func TestAFolderKeepsItsProject(t *testing.T) {
 	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
 	os.MkdirAll(filepath.Join(repo, "api"), 0o755)
 
-	first := startIn(t, "a1", repo, "startup")
+	// Not tracked: the session stays out of the console until `track` adds it, which gives the
+	// repository its id; from then on its sessions join on their own.
+	if pid := startIn(t, "a1", repo, "startup"); pid != "" || configIDOf(t, repo) != "" {
+		t.Fatalf("an untracked folder's session joined the console as %q", pid)
+	}
+	first, _, err := core.RegisterSession("a1", repo, "", "startup") // what `track` does
+	if err != nil {
+		t.Fatal(err)
+	}
 	if configIDOf(t, repo) != first {
 		t.Fatalf("the folder's config should hold the task's id %s, has %q", first, configIDOf(t, repo))
 	}
@@ -548,5 +556,55 @@ func TestIncidentAsk(t *testing.T) {
 		if incidentAsk.MatchString(s) {
 			t.Errorf("incident hint for %q", s)
 		}
+	}
+}
+
+func TestUntrackedSessionsStayOut(t *testing.T) {
+	setup(t, false)
+	work := filepath.Join(t.TempDir(), "notes")
+	os.MkdirAll(work, 0o755)
+	env := filepath.Join(t.TempDir(), "env")
+	t.Setenv("CLAUDE_ENV_FILE", env)
+
+	out := runHook("session-start", fmt.Sprintf(`{"session_id":"u1","cwd":%q,"transcript_path":"/t/u1.jsonl","source":"startup"}`, work))
+	if !strings.Contains(out, "not in the lacarta console") || !strings.Contains(out, " track`") {
+		t.Errorf("an untracked session should get the hint, got %s", out)
+	}
+	b, _ := os.ReadFile(env)
+	if !strings.Contains(string(b), "LACARTA_SESSION=u1") || !strings.Contains(string(b), "LACARTA_TRANSCRIPT=/t/u1.jsonl") ||
+		strings.Contains(string(b), "LACARTA_PROJECT") {
+		t.Errorf("env file: %s", b)
+	}
+	for _, ev := range []string{"prompt", "post-tool", "notification", "stop", "session-end"} {
+		if out := runHook(ev, fmt.Sprintf(`{"session_id":"u1","cwd":%q,"prompt":"hi"}`, work)); out != "" {
+			t.Errorf("%s printed %q for an untracked session", ev, out)
+		}
+	}
+	if out := runHook("prompt", fmt.Sprintf(`{"session_id":"u1","cwd":%q,"prompt":"we've been hacked"}`, work)); !strings.Contains(out, "incident init") {
+		t.Errorf("an untracked session should still get the incident hint, got %q", out)
+	}
+	h, _ := core.HubRead()
+	if _, ok := h.Sessions.Get("u1"); ok {
+		t.Error("an untracked session was registered")
+	}
+	if _, err := os.Stat(filepath.Join(work, ".lacarta")); err == nil {
+		t.Error("an untracked folder got a .lacarta/ folder")
+	}
+
+	// Added with `track`, the session is known: resuming it joins even in an untracked folder.
+	pid, _, err := core.RegisterSession("u1", work, "/t/u1.jsonl", "startup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := runHook("session-start", fmt.Sprintf(`{"session_id":"u1","cwd":%q,"source":"resume"}`, work)); !strings.Contains(out, pid) {
+		t.Errorf("a tracked session should rejoin %s: %s", pid, out)
+	}
+
+	// auto_track brings back the old behaviour: every session joins.
+	os.WriteFile(filepath.Join(os.Getenv("LACARTA_HOME"), "config.json"), []byte(`{"auto_track": true, "remote_control": false}`), 0o644)
+	other := filepath.Join(t.TempDir(), "other")
+	os.MkdirAll(other, 0o755)
+	if out := runHook("session-start", fmt.Sprintf(`{"session_id":"u2","cwd":%q,"source":"startup"}`, other)); !strings.Contains(out, "is registered in the lacarta console") {
+		t.Errorf("auto_track: %s", out)
 	}
 }

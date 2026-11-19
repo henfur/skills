@@ -422,3 +422,13 @@ input[type="text"]:focus-visible, textarea:focus-visible { outline: 2px solid va
 .desk-key { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .desk-key:hover { color: var(--brand); }
 .desk-draft { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin: 6px 0; overflow-x: auto; }
+
+/* Export toolbar on rendered documents, and printing one document alone (lib/doc.js). */
+.doc-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+#print-root { display: none; }
+@media print {
+  :root[data-printing] body > :not(#print-root) { display: none !important; }
+  :root[data-printing] #print-root { display: block; background: #fff; color: #000; }
+  :root[data-printing] #print-root .md { max-width: none; }
+  :root[data-printing] #print-root pre { white-space: pre-wrap; }
+}

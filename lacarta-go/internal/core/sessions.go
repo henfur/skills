@@ -77,6 +77,22 @@ func AttachSession(s *Store, sid, cli, transcript, cwd, source string) error {
 	})
 }
 
+// Tracked says whether sessions started in cwd join the console on their own: the folder is a
+// software project or a review desk, an audit's target, or has a lacarta id in its config.json
+// (`track` writes one), or the machine's config sets auto_track. Other sessions join only when
+// asked to, with `track` or one of the init commands.
+func Tracked(cwd string) bool {
+	if FindRoot(cwd) != "" || AuditFor(cwd) != "" || FolderID(cwd) != "" {
+		return true
+	}
+	return SettingsRead().AutoTrack
+}
+
+// FolderID: the lacarta id in the config.json of cwd's folder, "" if none.
+func FolderID(cwd string) string {
+	return configID(ProjectConfigPath(Single, &Store{Root: cwd}))
+}
+
 // RegisterSession finds or creates the project of a CLI session.
 func RegisterSession(sid, cwd, transcript, source string) (string, *Store, error) {
 	h, err := HubRead()
@@ -224,15 +240,21 @@ func firstNonEmptyStr(a, b string) string {
 	return b
 }
 
-// MoveSession: `init` inside a registered single-agent session; the session now belongs to
-// the new project.
-func MoveSession(sid, toPID string, to *Store) error {
+// MoveSession: `init` inside a single-agent session; the session now belongs to the new project.
+// A session the console didn't know yet (its folder wasn't tracked) joins the project directly.
+func MoveSession(sid, toPID string, to *Store, transcript string) error {
 	h, err := HubRead()
 	if err != nil {
 		return err
 	}
 	old, ok := h.Sessions.Get(sid)
-	if !ok || old == toPID {
+	if !ok {
+		if err := HubEdit(func(h *Hub) error { h.Sessions.Set(sid, toPID); return nil }); err != nil {
+			return err
+		}
+		return AttachSession(to, sid, CLIClaude, transcript, to.Root, "")
+	}
+	if old == toPID {
 		return nil
 	}
 	if p, ok := h.Projects.Get(old); !ok || p.Template != Single {

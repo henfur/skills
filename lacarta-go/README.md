@@ -121,6 +121,7 @@ everywhere. Tasks are no longer named after their first prompt. A session in the
 | `models` | `{kind: {role: model}}` | `{role: model}` | Read before every spawn. The file is the only place they are set: the console shows them. `models --set role=model [--project]` writes the file from a terminal. |
 | `skills` | `{"all": [...], kind: {"all": [...], role: [...]}}` | `{"all": [...], role: [...]}` | The skills each role loads, see below. Set in the files only; `lacarta skills` shows the result. |
 | `remote_control` | default for every session | default for this project | The Chat toggle of a project still wins. |
+| `auto_track` | `true`: every session joins the console | refused | Off by default: a session joins when its folder is tracked, or when `lacarta track` adds it. |
 | `templates` | a folder | a folder inside the project | Spec templates `init` copies (`functional.md`, `architecture.md`, `stack.md`, `security.md`); a missing file falls back to the next layer, then the built-in one. |
 | `desk` | refused | a review desk's settings | Forge, targets, filters, profiles and their modes, policy, schedule (see the desk design). |
 | `plugins` | on/off in every project | on/off in this one | lacarta's own plugins (an audit's checks and companions). Set in the files only: the console's Plugins tab shows them, and `plugin enable|disable` are gone. Required plugins stay on. |

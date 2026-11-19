@@ -106,7 +106,7 @@ func cmdDeskInit(a *Args) error {
 	}
 	s := core.SoftwareStore(root)
 	if sid := os.Getenv("LACARTA_SESSION"); sid != "" {
-		if err := core.MoveSession(sid, pid, s); err != nil {
+		if err := core.MoveSession(sid, pid, s, os.Getenv("LACARTA_TRANSCRIPT")); err != nil {
 			return err
 		}
 	}

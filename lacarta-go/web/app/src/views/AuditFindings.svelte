@@ -3,6 +3,8 @@
   import Badge from "../components/Badge.svelte";
   import Md from "../components/Md.svelte";
   import ReviewCard from "../components/ReviewCard.svelte";
+  import DocTools from "../components/DocTools.svelte";
+  import { findingMarkdown, findingsMarkdown } from "../lib/doc.js";
   import { app, ui } from "../lib/state.svelte.js";
   import { label } from "../lib/format.js";
   let { st, d } = $props();
@@ -27,11 +29,14 @@
       {#if n || k === "confirmed"}<button type="button" role="tab" aria-selected={tab === k} onclick={() => { ui.auditTab = k; }}>{name} · {n}</button>{/if}
     {/each}
   </div>
+  <DocTools text={findingsMarkdown(list, `${st.project.name}: ${TABS.find(t => t[0] === tab)[1].toLowerCase()} findings`)}
+    filename={`findings-${tab.replace(/_/g, "-")}.md`} label="these findings" />
   <div class="stack">
     {#each list as f (f.fingerprint)}
       <article class="card finding" class:pending={pending(f)}>
         <div class="row">{#if f.severity}<SevBadge s={f.severity} />{/if}<h3 style="margin:0">{f.title}</h3>
           {#if pending(f)}<Badge s="awaiting-approval" text="To review" />{/if}<code class="small muted" style="margin-left:auto">{f.fingerprint}</code></div>
+        <DocTools text={findingMarkdown(f)} filename={`${f.fingerprint}.md`} label={f.title} />
         {#if f.review?.action === "severity"}<div class="small">Agents' severity: <SevBadge s={f.review.from} /> → yours: <SevBadge s={f.review.severity} /></div>{/if}
         <Md text={f.description} />
         {#if f.root_cause || f.claimed_root_cause}<p class="small"><strong>Root cause.</strong> {f.root_cause || f.claimed_root_cause}</p>{/if}

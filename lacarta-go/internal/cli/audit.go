@@ -25,7 +25,7 @@ import (
 var noProject = map[string]bool{"audit init": true, "audit preflight": true, "audit verify": true,
 	"plugin list": true, "plugin install": true, "plugin add": true, "plugin remove": true, "sandbox run": true,
 	"config": true, "config check": true, "config init": true, "desk init": true, "desk guide": true,
-	"incident init": true, "incident guide": true}
+	"incident init": true, "incident guide": true, "track": true}
 
 func auditCommands() []*Cmd {
 	roles := []string{}
@@ -192,7 +192,7 @@ func cmdAuditInit(a *Args) error {
 	}
 	s := &core.Store{Root: target, Dir: dir}
 	if sid := os.Getenv("LACARTA_SESSION"); sid != "" {
-		if err := core.MoveSession(sid, pid, s); err != nil {
+		if err := core.MoveSession(sid, pid, s, os.Getenv("LACARTA_TRANSCRIPT")); err != nil {
 			return err
 		}
 	}

@@ -92,6 +92,10 @@ func runScenario(t *testing.T, name, path string) string {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// The scenarios record what sessions in the console do: every one joins, as before `track`.
+	if err := os.WriteFile(filepath.Join(home, "config.json"), []byte(`{"auto_track": true}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	env := map[string]string{
 		"LACARTA_HOME": home, "LACARTA_NO_DAEMON": "1", "W": work, "HOME": os.Getenv("HOME"),
 		"PATH": os.Getenv("PATH"), "LANG": "C.UTF-8", "CLAUDE_CONFIG_DIR": filepath.Join(home, "claude"),

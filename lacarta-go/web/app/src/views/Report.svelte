@@ -2,6 +2,7 @@
   import Md from "../components/Md.svelte";
   import Ago from "../components/Ago.svelte";
   import Icon from "../components/Icon.svelte";
+  import DocTools from "../components/DocTools.svelte";
   import { app, refresh } from "../lib/state.svelte.js";
   import { post, projectURL, TOKEN } from "../lib/api.js";
   let { st, d } = $props();
@@ -56,7 +57,8 @@
   <h2>Draft</h2>
   {#if !ready}<div class="banner info"><Icon name="info" /><div>Review every finding first: {d.audit.to_review} left{d.audit.recheck ? `, ${d.audit.recheck} waiting for another check` : ""}.</div></div>{/if}
   <section class="card">
-    <div class="row" style="margin-bottom:8px"><span class="badge warning">Draft</span><a href={url("draft=1")} target="_blank" rel="noopener" style="margin-left:auto">Print view</a></div>
+    <div class="row" style="margin-bottom:8px"><span class="badge warning">Draft</span><span class="row" style="margin-left:auto"><DocTools text={au.draft} filename="report-draft.md" label="the draft report" />
+      <a class="btn sm ghost" href={url("draft=1")} target="_blank" rel="noopener">Print view (PDF)</a></span></div>
     <Md text={au.draft.replace(/^---\n[\s\S]*?\n---\n/, "")} cls="wide" />
   </section>
   {#if ready}

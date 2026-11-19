@@ -45,6 +45,9 @@ func fixture(t *testing.T) (home, taskID, softID string) {
 	_ = os.MkdirAll(app, 0o755)
 	var out bytes.Buffer
 	hooks.Run("session-start", strings.NewReader(fmt.Sprintf(`{"session_id":"s-1","cwd":%q,"transcript_path":%q}`, app, tr)), &out)
+	if _, _, err := core.RegisterSession("s-1", app, tr, "startup"); err != nil { // as `lacarta track` does
+		t.Fatal(err)
+	}
 	hooks.Run("prompt", strings.NewReader(`{"session_id":"s-1","prompt":"Fix it — vite"}`), &out)
 	h, _ := core.HubRead()
 	taskID = h.Projects.Keys()[0]

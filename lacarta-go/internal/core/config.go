@@ -60,7 +60,8 @@ const (
 type Settings struct {
 	Models        OMap[*OMap[string]]        `json:"models"`
 	RemoteControl bool                       `json:"remote_control"`
-	Auditor       string                     `json:"auditor,omitempty"` // the person who signs audit reports
+	AutoTrack     bool                       `json:"auto_track,omitempty"` // every session joins the console, as before `track`
+	Auditor       string                     `json:"auditor,omitempty"`    // the person who signs audit reports
 	Templates     string                     `json:"templates,omitempty"`
 	Plugins       map[string]bool            `json:"plugins,omitempty"`
 	Tools         map[string]string          `json:"tools,omitempty"`
@@ -203,6 +204,11 @@ func SettingsRead() *Settings {
 				warn("remote_control: expected true or false.")
 			} else {
 				s.remoteSet = true
+			}
+		case "auto_track":
+			if json.Unmarshal(v, &s.AutoTrack) != nil {
+				s.AutoTrack = false
+				warn("auto_track: expected true or false.")
 			}
 		case "auditor":
 			if json.Unmarshal(v, &s.Auditor) != nil || len([]rune(s.Auditor)) > 120 {
@@ -636,7 +642,7 @@ func ProjectConfigRead(st *State) *ProjectConfig {
 			for _, w := range DeskConfigRead(st).Warnings {
 				warn("%s", w)
 			}
-		case "tools", "auditor":
+		case "tools", "auditor", "auto_track":
 			warn("%s: can only be set in %s, not in a project.", key, HomeConfigPath())
 		default:
 			warn("unknown setting %q. A project can set: id, name, models, skills, remote_control, templates, plugins (and desk, for a review desk).", key)

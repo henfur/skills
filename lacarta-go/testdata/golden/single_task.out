@@ -77,6 +77,6 @@ Next: Work on the task with the user.
 [exit 0]
 
 $ --root app status
-stderr: Refused: No project here. `init` creates a software project in this folder; sessions register on their own once `install` has added the hooks.
+stderr: Refused: No project here. `init` creates a software project in this folder; `track` adds this session (and the folder's next ones) to the console as a single-agent task.
 [exit 2]
 

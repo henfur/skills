@@ -3,6 +3,7 @@
   import Ago from "../components/Ago.svelte";
   import Md from "../components/Md.svelte";
   import Icon from "../components/Icon.svelte";
+  import DocTools from "../components/DocTools.svelte";
   import { app, refresh } from "../lib/state.svelte.js";
   import { post, projectURL } from "../lib/api.js";
   let { st, d } = $props();
@@ -11,6 +12,7 @@
   const texts = $derived(app.data.case?.reports || {});
   const question = r => st.questions.find(q => q.status === "open" && q.effect?.type === "incident-report" && q.effect.item === r.id);
   const name = r => r.kind === "final" ? "Final report" : `Situation report ${r.number}`;
+  let docs = $state({});
   let open = $state(""), editing = $state(""), text = $state(""), comment = $state(""), error = $state(""), busy = $state(false);
   async function act(action, body) {
     busy = true;
@@ -39,6 +41,7 @@
         <button class="desk-key" onclick={() => open = open === r.id ? "" : r.id} aria-expanded={open === r.id || !!q}><strong>{name(r)}</strong></button>
         <Badge s={r.status === "in-review" ? "awaiting-approval" : r.status} text={r.status === "in-review" ? "waits for you" : r.status} />
         <code class="small">{r.file}</code><span class="small muted"><Ago iso={r.issued_at || r.at} />{#if r.edited} · edited by you{/if}</span>
+        {#if t?.text}<span style="margin-left:auto"><DocTools text={t.text} filename={r.file.split("/").pop()} target={(open === r.id || q) && editing !== r.id ? docs[r.id] : null} label={name(r)} /></span>{/if}
       </div>
       {#if t && !t.ok}<div class="banner danger"><Icon name="alert" /><div>This file is not what {r.status === "issued" ? "you issued" : "lacarta drafted"}: it changed outside lacarta.</div></div>{/if}
       {#if open === r.id || q}
@@ -46,7 +49,7 @@
           <textarea rows="24" style="width:100%;font-family:var(--mono);font-size:13px" bind:value={text} aria-label="Text of {name(r)}"></textarea>
           <div class="row"><button class="btn" disabled={busy} onclick={() => save(r)}>Save</button><button class="btn ghost" onclick={() => editing = ""}>Cancel</button></div>
         {:else}
-          <div class="desk-draft"><Md text={t?.text || "_The file can't be read._"} cls="wide" /></div>
+          <div class="desk-draft" bind:this={docs[r.id]}><Md text={t?.text || "_The file can't be read._"} cls="wide" /></div>
         {/if}
         {#if q && editing !== r.id}
           <div class="row" style="margin-top:8px">

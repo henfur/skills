@@ -1,5 +1,5 @@
 # Every Claude Code hook event, on a single-agent task and on a software project.
-> mkdir -p app proj/sub && echo '{"remote_control": false}' > .home/settings.json
+> mkdir -p app proj/sub && echo '{"remote_control": false, "auto_track": true}' > .home/config.json
 @set CLAUDE_ENV_FILE=$W/env
 $ hook session-start <<< {"session_id":"s-1","cwd":"$W/app","transcript_path":"/nowhere.jsonl","source":"startup"}
 @env env

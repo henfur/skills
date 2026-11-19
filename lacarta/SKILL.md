@@ -33,7 +33,7 @@ L=<this skill's directory>/scripts/lacarta.py    # Python 3.9+, standard library
 python3 $L --help                                 # every command; `<cmd> --help` for options
 ```
 
-Run commands from the project root, or anywhere below it. When the lacarta hooks are installed, your session is already registered in the console and `$LACARTA_PROJECT` names its project. State lives in `<project>/.lacarta/`: `state.json`, `specs/*.md`, `reviews/*.md`. Commit `.lacarta/` with the project (it has its own `.gitignore`); it is the project's design record.
+Run commands from the project root, or anywhere below it. When the lacarta hooks are installed, a session in a project's folder is already registered in the console and `$LACARTA_PROJECT` names its project; a session elsewhere joins when `init` runs. State lives in `<project>/.lacarta/`: `state.json`, `specs/*.md`, `reviews/*.md`. Commit `.lacarta/` with the project (it has its own `.gitignore`); it is the project's design record.
 
 | When | Command |
 | --- | --- |
@@ -67,7 +67,7 @@ Approvals (`spec submit`, `plan submit`, `phase complete`, `final complete`) and
 python3 $L init                      # name = .lacarta/config.json's, else the folder's, unless the user gave one; prints the console URL
 ```
 
-`init` registers the project in the console (and starts the console if needed). If this session was registered as a single-agent task, it moves into the new project; the user sees it switch. Tell the user the console URL, then run `models` and check the `orchestrator` line against the model you are running as: if it differs, say so and ask the user to switch with `/model <alias>` (you cannot switch yourself). Then ask what the project is (in the console, `ask --kind question`, unless they already told you) and begin the specification stage. If the user wants the console on another address, it is started by hand with `serve --host <ip>`, which prints a URL with a key; give them that URL.
+`init` registers the project in the console (and starts the console if needed). This session joins the new project (if it was a single-agent task in the console, it moves; the user sees it switch). Tell the user the console URL, then run `models` and check the `orchestrator` line against the model you are running as: if it differs, say so and ask the user to switch with `/model <alias>` (you cannot switch yourself). Then ask what the project is (in the console, `ask --kind question`, unless they already told you) and begin the specification stage. If the user wants the console on another address, it is started by hand with `serve --host <ip>`, which prints a URL with a key; give them that URL.
 
 **Existing `.lacarta/`.** Run `status` first and follow its `Next:` line. If `serve` says the console is not running, start it in the background. Re-read the specs before doing anything; do not rely on memory from an earlier session.
 

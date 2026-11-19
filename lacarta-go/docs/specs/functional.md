@@ -32,11 +32,13 @@ Out of scope for now: other agent CLIs (Codex, Gemini: an adapter interface is p
   - [x] `init` registers the project; its id is `<slug of the name>-<first 4 hex of sha256(root path)>` (golden: `software_flow`).
   - [x] A software project created before the hub existed joins it the first time any command runs in it (golden: `migration`).
 
-### FR-2: Every session registers itself
+### FR-2: Sessions join the console when asked
 - Priority: must. Status: **done**.
-- When a Claude Code session starts, it is attached as agent A-1 to the software project of its folder (nearest `.lacarta/state.json` at or above `cwd`), or else to a new single-agent task named after the folder. A session that started before the hooks were installed registers at its first hook event.
+- When a Claude Code session starts in a tracked folder, it is attached as agent A-1 to the software project or review desk of its folder (nearest `.lacarta/state.json` at or above `cwd`), to the audit of its folder, or else to the folder's single-agent task. A folder is tracked when it is one of those, when its `.lacarta/config.json` holds a lacarta id, or when the home config sets `auto_track`. A session elsewhere stays out of the console: it is told how to join, and joins when `track` (or `init`, `audit init`, `desk init`, `incident init`) runs in it. A session that started before the hooks were installed registers at its first hook event, in a tracked folder.
 - Acceptance criteria:
-  - [x] SessionStart in a folder without `.lacarta/` creates a task `t-<6 hex>` and maps the session to it (golden: `hooks`).
+  - [x] SessionStart in an untracked folder registers nothing, writes no file in the folder, and the other hooks print nothing for that session (`hooks_test.go: TestUntrackedSessionsStayOut`).
+  - [x] `track` from the session registers it and gives the folder its id; from a terminal it gives the folder its id for the next sessions; `init` attaches a session the console didn't know (`cli/track_test.go: TestTrack`).
+  - [x] With `auto_track`, SessionStart in a folder without `.lacarta/` creates a task `t-<6 hex>` and maps the session to it (golden: `hooks`).
   - [x] SessionStart below a software project's root joins that project (golden: `hooks`, `s-2`).
   - [x] A `prompt` event from an unknown session registers it (golden: `hooks`, `s-3`).
   - [x] Resuming a session (same session id) reattaches it and reopens an ended task (golden: `hooks`).

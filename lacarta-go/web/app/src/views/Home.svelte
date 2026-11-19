@@ -73,7 +73,7 @@
 {/snippet}
 
 <h1>Projects</h1>
-<p class="lede">Every agent session and project on this machine. Each Claude Code session registers here on its own.</p>
+<p class="lede">Your projects, and the agent sessions you added. A session joins when you ask its agent to track it (<code>lacarta track</code>), or when it starts in a tracked folder.</p>
 {#if asks.length || terminal.length}
   <h2>Waiting for you · {asks.length + terminal.length}</h2>
   <div class="card list">
@@ -89,7 +89,7 @@
 {#if active.length}
   <div class="projects">{#each active as p (p.id)}{@render card(p)}{/each}</div>
 {:else if !live.length}
-  <div class="card empty">No sessions yet. Run <code>lacarta install</code> once; every Claude Code session started afterwards appears here.</div>
+  <div class="card empty">No sessions yet. Run <code>lacarta install</code> once, then ask an agent to "track this session" (it runs <code>lacarta track</code>), or start one in a lacarta project.</div>
 {:else}
   <div class="card empty">Nothing is running. Sessions you start appear here.</div>
 {/if}

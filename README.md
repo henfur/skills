@@ -10,9 +10,9 @@ An agent skill that runs every project through the same framework:
 2. **Implementation**: one phase at a time, each closed by a functional review, a security review and your approval. A high or critical finding stops development until you decide.
 3. **Final review**: two fresh agents (functional, security) with no memory of the build, judging only the repository.
 
-One web console per machine shows every agent session and project: the questions waiting for you, notifications, each session's chat (with remote control: write to an agent from the browser), and for software projects the specs, every decision, phases with their reviews, findings and the overall status.
+One web console per machine shows your projects and the agent sessions you add to it: the questions waiting for you, notifications, each session's chat (with remote control: write to an agent from the browser), and for software projects the specs, every decision, phases with their reviews, findings and the overall status.
 
-Every Claude Code session registers itself through hooks. A session in a folder with a `.lacarta/` software project joins it; any other session appears as a **single-agent task** (overview, chat, questions, activity). More kinds of project (security audit, DevOps) will get their own views. Models are set once per kind of project on the console's Settings page.
+Claude Code sessions join the console through hooks, but only when asked. A session in a folder with a `.lacarta/` software project (or a review desk, or an audit's target) joins it on its own. Any other session stays out until you, or the agent at your request, run `lacarta track`: it then appears as a **single-agent task** (overview, chat, questions, activity), and later sessions in that folder join it on their own. `"auto_track": true` in `~/.lacarta/config.json` makes every session join, as before. More kinds of project (security audit, DevOps) will get their own views. Models are set once per kind of project on the console's Settings page.
 
 ## Layout
 

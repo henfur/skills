@@ -83,3 +83,17 @@ test("the auditor reviews, approves and gets a signed report", async ({ page, re
   await page.goto(`/#/p/${ids().audit}/overview`);
   await expect(page.locator(".step.current, .step.done").last()).toContainText("Done");
 });
+
+test("findings download as Markdown, one or the whole tab", async ({ page }) => {
+  await page.goto(`/#/p/${ids().audit}/findings`);
+  const first = page.locator("article.finding").first();
+  const title = (await first.locator("h3").textContent()).trim();
+  const [one] = await Promise.all([page.waitForEvent("download"), first.getByRole("button", { name: "Download .md" }).click()]);
+  const md = readFileSync(await one.path(), "utf8");
+  expect(md.startsWith(`# ${title}\n`)).toBe(true);
+  expect(md).toContain("## Description");
+  const group = page.getByRole("group", { name: "Export these findings" });
+  const [all] = await Promise.all([page.waitForEvent("download"), group.getByRole("button", { name: "Download .md" }).click()]);
+  expect(all.suggestedFilename()).toMatch(/^findings-[a-z-]+\.md$/);
+  expect(readFileSync(await all.path(), "utf8")).toContain(`## ${title}\n`);
+});

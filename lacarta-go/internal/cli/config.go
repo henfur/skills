@@ -308,6 +308,7 @@ const homeConfigTemplate = `{
   "// skills": "{\"all\": [...], \"<kind>\": {\"all\": [...], \"<role>\": [...]}}: the skills every agent loads, every agent of one kind of project, one role. A name is a skill of the agent CLI, plugin:skill for a plugin's, or a lacarta plugin's id. ` + "`lacarta skills`" + ` shows the result.",
   "skills": {"all": []},
   "remote_control": true,
+  "auto_track": false,
   "plugins": {},
   "tools": {}
 }
