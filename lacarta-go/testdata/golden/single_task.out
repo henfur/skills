@@ -66,7 +66,7 @@ $ decisions
 [exit 0]
 
 $ agent list
-  A-1   Ada        agent                    opus    working  Works on the task with you.
+  A-1   Jerry      agent                    opus    working  Works on the task with you.
 [exit 0]
 
 $ --project $LACARTA_PROJECT status

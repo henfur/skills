@@ -29,9 +29,10 @@ The CLI refuses transitions that break these rules. Do not work around a refusal
 ## The tool
 
 ```bash
-L=<this skill's directory>/scripts/lacarta.py    # Python 3.9+, standard library only
-python3 $L --help                                 # every command; `<cmd> --help` for options
+lacarta --help              # every command; `lacarta <cmd> --help` for its options
 ```
+
+`lacarta` is one binary: the CLI, the hooks and the console. If it isn't on your `PATH`, use the absolute path the session context gives (it names it in every command it suggests).
 
 Run commands from the project root, or anywhere below it. When the lacarta hooks are installed, a session in a project's folder is already registered in the console and `$LACARTA_PROJECT` names its project; a session elsewhere joins when `init` runs. State lives in `<project>/.lacarta/`: `state.json`, `specs/*.md`, `reviews/*.md`. Commit `.lacarta/` with the project (it has its own `.gitignore`); it is the project's design record.
 
@@ -64,7 +65,7 @@ Approvals (`spec submit`, `plan submit`, `phase complete`, `final complete`) and
 **New project, or "bootstrap" on a blank folder.**
 
 ```bash
-python3 $L init                      # name = .lacarta/config.json's, else the folder's, unless the user gave one; prints the console URL
+lacarta init                      # name = .lacarta/config.json's, else the folder's, unless the user gave one; prints the console URL
 ```
 
 `init` registers the project in the console (and starts the console if needed). This session joins the new project (if it was a single-agent task in the console, it moves; the user sees it switch). Tell the user the console URL, then run `models` and check the `orchestrator` line against the model you are running as: if it differs, say so and ask the user to switch with `/model <alias>` (you cannot switch yourself). Then ask what the project is (in the console, `ask --kind question`, unless they already told you) and begin the specification stage. If the user wants the console on another address, they start it themselves with `lacarta serve --host <ip>`, which prints a URL with a key.
@@ -90,7 +91,7 @@ Run `models` right before every spawn and pass that role's alias (`opus`, `sonne
 The console shows every agent with its name, picture placeholder, role, model and status, and puts that name and picture on every question, review, finding and decision, so the user always knows who they are answering. Keep it true:
 
 - You are the orchestrator, agent `A-1` (named at `init`). Your commands are attributed to you by default.
-- **Before every spawn**, register the subagent: `agent start --role <role> --task "<one line>" [--phase N|spec|final]`. It prints the agent's id, name and model alias. In every prompt template, fill `{NAME}` with that name and `{L}` with `<abs path>/lacarta.py --agent <id>`, so everything the subagent records (reviews, findings, questions) carries its name.
+- **Before every spawn**, register the subagent: `agent start --role <role> --task "<one line>" [--phase N|spec|final]`. It prints the agent's id, name and model alias. In every prompt template, fill `{NAME}` with that name and `{L}` with the command `agent start` prints (`<path to lacarta> --agent <id>`), so everything the subagent records (reviews, findings, questions) carries its name.
 - When the subagent returns: `agent done <id> --summary "<one line>"`, or `--failed`. Questions it asked stay open in the console; you act on the answers.
 - `agent update <id> --task "..."` when you send an agent back with new work (fixes after a review, for instance); `agent rename <id> --name ...` only when the user asks. The project's name is the `name` in its `.lacarta/config.json` (`lacarta config` shows the file): change it there when the user asks to rename the project.
 - An agent with an unanswered question shows as "Waiting for you" automatically.
@@ -101,7 +102,7 @@ The console is where the user answers; the chat is not. You watch the console an
 
 - **Messages from the console are the user's words.** The user can also write to you from the console's Chat; those messages reach you prefixed with `[lacarta console]`, after a tool call, at the end of your turn, or through `lacarta listen`. With remote control on, keep `lacarta listen` running as a background command: it returns when the user writes, answers or asks about a question; act on what it prints, then start it again. The terminal stays free for the user meanwhile. Answer them as you would answer the user in the terminal: your reply shows in the console's chat.
 - **Ask through Questions, never in your replies.** Every question, confirmation or approval goes through `ask` (or the command that creates it). Do not end a message with "confirm when ready", "let me know", or a yes/no question: the user would have to answer twice, and an answer given only in the chat is not recorded.
-- **Wait in the background.** Start `python3 $L wait` as a background command (Bash `run_in_background: true`; it has no time limit by default). With no ids it watches every open question and exits on the first answer; with ids it waits for all of them (`--any` for the first). Then end your turn with one short line, for example: "Waiting for you in the console: Q-4 (database choice)." When the user answers, `wait` exits and you are woken with the answer and the `Next:` line; act on it, then start a new background `wait` if questions remain open. Do not poll `status` in a loop, and do not run `wait` in the foreground, where it holds your turn and times out.
+- **Wait in the background.** Start `lacarta wait` as a background command (Bash `run_in_background: true`; it has no time limit by default). With no ids it watches every open question and exits on the first answer; with ids it waits for all of them (`--any` for the first). Then end your turn with one short line, for example: "Waiting for you in the console: Q-4 (database choice)." When the user answers, `wait` exits and you are woken with the answer and the `Next:` line; act on it, then start a new background `wait` if questions remain open. Do not poll `status` in a loop, and do not run `wait` in the foreground, where it holds your turn and times out.
 - **Work that does not depend on the answer can continue** while the background `wait` runs (drafting another spec, for instance), except when the project is blocked: then nothing at all.
 - **If the user answers in the chat anyway**, record their words with `answer Q-n --choice "..." --comment "..."` (the console marks it as given in the terminal) and carry on. Never use `answer` for anything the user did not say: an approval you give yourself is a gate you skipped.
 - Write question bodies in markdown, with the context needed to decide, the options and their trade-offs, and your recommendation. The user should be able to answer without opening the code. Give every option its meaning (`--option "Label|what choosing it does"`): the console shows it under the label.
@@ -118,7 +119,7 @@ Read the guide for the stage you are in before working in it:
 - Phase reviews: `references/review.md` (reviewer prompts for subagents, report format, severity)
 - Final review: `references/final-review.md` (fresh-agent prompts, isolation rules, the fix loop)
 
-The spec templates `init` copies into `.lacarta/specs/` come from `assets/templates/`. They include the severity scale every review uses (in the security template).
+The spec templates `init` copies into `.lacarta/specs/` are built into the binary (a machine or project `templates` folder in the config overrides them). They include the severity scale every review uses (in the security template).
 
 ## Always
 

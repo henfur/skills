@@ -157,12 +157,13 @@ func SpecReviewStatus(st *State, s *Store) (string, error) {
 	return "stale", nil
 }
 
-// Refresh invalidates approvals of edited specs, then advances the stage when its exit
-// conditions are met. It runs after every write.
-func Refresh(st *State, s *Store) error {
-	if st.Template == Audit {
-		return AuditRefresh(st, s)
-	}
+// Refresh advances the stage when its exit conditions are met, as the project's kind defines
+// them. It runs after every write.
+func Refresh(st *State, s *Store) error { return BehaviourOf(st).Refresh(st, s) }
+
+// specRefresh invalidates approvals of edited specs, then ends the specification stage once
+// everything is reviewed and approved.
+func specRefresh(st *State, s *Store) error {
 	if st.Stage != "specification" {
 		return nil
 	}
@@ -217,25 +218,23 @@ func NextAction(st *State, s *Store) (string, error) {
 				"`reply %s --message ...`, then `wait` again. The question stays open.", q.ID, q.ID), nil
 		}
 	}
-	waiting := OpenQuestions(st)
-	if st.Template == Audit {
-		return AuditNext(st, s)
+	return BehaviourOf(st).Next(st, s, OpenQuestions(st))
+}
+
+// singleNext: a single-agent task only waits for the user's answers.
+func singleNext(st *State, waiting []*Question) string {
+	if st.Stage == "ended" {
+		return "The session ended."
 	}
-	if st.Template == Desk && st.Desk != nil {
-		return DeskNext(st), nil
+	if len(waiting) > 0 {
+		return fmt.Sprintf("Wait for the user to answer %s in the console.", ids(waiting))
 	}
-	if st.Template == Incident && st.Incident != nil {
-		return IncidentNext(st), nil
-	}
-	if st.Template == Single {
-		if stage == "ended" {
-			return "The session ended.", nil
-		}
-		if len(waiting) > 0 {
-			return fmt.Sprintf("Wait for the user to answer %s in the console.", ids(waiting)), nil
-		}
-		return "Work on the task with the user.", nil
-	}
+	return "Work on the task with the user."
+}
+
+// softwareNext: findings first, then the stage's next step.
+func softwareNext(st *State, s *Store, waiting []*Question) (string, error) {
+	stage := st.Stage
 	for _, q := range waiting {
 		if q.Effect != nil && q.Effect.Type == "finding-triage" {
 			return fmt.Sprintf("Blocked: wait for the user's decision on %s (`wait %s`). Do not write code.", q.ID, q.ID), nil
@@ -378,26 +377,20 @@ func DeriveState(st *State, s *Store) (*Derived, error) {
 	for _, a := range st.Agents {
 		d.AgentStatus[a.ID] = AgentStatus(st, a)
 	}
-	if st.Template == Single {
-		return d, nil
+	if err := BehaviourOf(st).Derive(st, s, d); err != nil {
+		return nil, err
 	}
-	if st.Template == Audit {
-		d.Audit = DeriveAudit(st, s)
-		return d, nil
-	}
-	if st.Template == Desk && st.Desk != nil {
-		d.Desk = DeriveDesk(st)
-		return d, nil
-	}
-	if st.Template == Incident && st.Incident != nil {
-		d.Incident = DeriveIncident(st)
-		return d, nil
-	}
+	return d, nil
+}
+
+// softwareDerive: what blocks the project, the spec review, open findings, approvals and phases.
+func softwareDerive(st *State, s *Store, d *Derived) error {
+	var err error
 	if b := BlockedReason(st); b != "" {
 		d.Blocked = &b
 	}
 	if d.SpecReview, err = SpecReviewStatus(st, s); err != nil {
-		return nil, err
+		return err
 	}
 	d.OpenFindings = map[string]int{}
 	for _, sev := range Severities {
@@ -420,7 +413,7 @@ func DeriveState(st *State, s *Store) (*Derived, error) {
 		}
 	}
 	d.SpecsApproved, d.PhasesDone = &approved, &done
-	return d, nil
+	return nil
 }
 
 // TriageBody is the triage question: enough to decide without opening the code or the report.

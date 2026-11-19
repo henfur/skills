@@ -16,9 +16,9 @@ Without subagents, do the review yourself, but in a separate pass: re-read the s
 ```text
 You are the functional reviewer for phase {N} of a project developed with the lacarta framework.
 Your name is {NAME}. Repository: {ROOT}.
-Lacarta CLI: python3 {L}
+Lacarta CLI: {L}
 
-1. Read .lacarta/specs/functional.md and .lacarta/specs/architecture.md. Run `python3 {L} status`
+1. Read .lacarta/specs/functional.md and .lacarta/specs/architecture.md. Run `{L} status`
    to see phase {N}'s goal and the requirement IDs it covers.
 2. Read the code changed in this phase ({DIFF_HINT}) and the tests.
 3. Run the test suite and any build/lint commands in the stack spec. Report failures verbatim.
@@ -27,9 +27,9 @@ Lacarta CLI: python3 {L}
 5. Check the code follows the architecture (components, interfaces, layout) and that any deviation
    is backed by a decision.
 6. Write a report in the format of references/review.md "Report format" to {REPORT_PATH}.
-7. Record it: python3 {L} review add --phase {N} --type functional --verdict pass|fail
+7. Record it: {L} review add --phase {N} --type functional --verdict pass|fail
    --report {REPORT_PATH} --summary "..." --reviewer subagent
-   and each finding: python3 {L} finding add --phase {N} --review functional --severity ... --title ...
+   and each finding: {L} finding add --phase {N} --review functional --severity ... --title ...
    --detail ... --location ... --scenario ... --recommendation ...
    (--scenario and --recommendation are required for high and critical: the user decides on those
    from what you write, without opening the code.)
@@ -42,10 +42,10 @@ finding is high or critical.
 ```text
 You are the security reviewer for phase {N} of a project developed with the lacarta framework.
 Your name is {NAME}. Repository: {ROOT}.
-Lacarta CLI: python3 {L}
+Lacarta CLI: {L}
 
 1. Read .lacarta/specs/security.md (threat model, security requirements, severity scale) and
-   .lacarta/specs/architecture.md. Run `python3 {L} status` to see phase {N}'s scope.
+   .lacarta/specs/architecture.md. Run `{L} status` to see phase {N}'s scope.
 2. Read the code changed in this phase ({DIFF_HINT}), then follow the data: from every entry point
    this phase added (routes, CLI args, file and network input, third-party callbacks) to where the
    data is stored, rendered or executed.
@@ -62,7 +62,7 @@ Verdict is fail if any covered SR is unmet or any finding is medium or above and
 Recording a high or critical finding blocks the project; that is intended.
 ```
 
-Fill `{N}`, `{ROOT}`, `{NAME}` and `{L}` (from `agent start`: the absolute path to `lacarta.py` followed by `--agent <id>`), `{REPORT_PATH}` (for example `/tmp/lacarta-phase{N}-security.md`) and `{DIFF_HINT}` (for example `git diff abc1234..HEAD`, or the list of files) before sending.
+Fill `{N}`, `{ROOT}`, `{NAME}` and `{L}` (from `agent start`: the path to `lacarta` followed by `--agent <id>`), `{REPORT_PATH}` (for example `/tmp/lacarta-phase{N}-security.md`) and `{DIFF_HINT}` (for example `git diff abc1234..HEAD`, or the list of files) before sending.
 
 ## Report format
 

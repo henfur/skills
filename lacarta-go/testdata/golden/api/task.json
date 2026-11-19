@@ -1,0 +1,101 @@
+{
+  "chat": [
+    {
+      "at": "<TS>",
+      "role": "user",
+      "text": "Fix it — vite"
+    },
+    {
+      "at": "<TS>",
+      "role": "agent",
+      "text": "On it."
+    },
+    {
+      "at": "<TS>",
+      "name": "Bash",
+      "role": "tool",
+      "text": "ls"
+    }
+  ],
+  "config": {
+    "exists": true,
+    "id": "<TASK>",
+    "name": "app",
+    "path": "<HOME>/app/.lacarta/config.json",
+    "warnings": []
+  },
+  "derived": {
+    "agent_status": {
+      "A-1": "working"
+    },
+    "blocked": null,
+    "listening": false,
+    "next": "Work on the task with the user.",
+    "open_questions": 0,
+    "pending_messages": 0,
+    "remote": true
+  },
+  "id": "<TASK>",
+  "state": {
+    "activity": [
+      {
+        "agent": "A-1",
+        "at": "<TS>",
+        "kind": "stage",
+        "text": "Task started in <HOME>/app."
+      },
+      {
+        "agent": "A-1",
+        "at": "<TS>",
+        "kind": "agent",
+        "text": "Jerry connected (claude-code session, startup)."
+      }
+    ],
+    "agents": [
+      {
+        "avatar": null,
+        "finished_at": null,
+        "id": "A-1",
+        "model": "opus",
+        "name": "Jerry",
+        "phase": null,
+        "role": "agent",
+        "session": {
+          "cli": "claude-code",
+          "cwd": "<HOME>/app",
+          "ended_at": null,
+          "id": "s-1",
+          "started_at": "<TS>",
+          "transcript": "<HOME>/claude/projects/x/s-1.jsonl"
+        },
+        "started_at": "<TS>",
+        "status": "working",
+        "summary": "",
+        "task": "Works on the task with you.",
+        "updated_at": "<TS>"
+      }
+    ],
+    "attention": null,
+    "counters": {},
+    "decisions": [],
+    "findings": [],
+    "inbox": [],
+    "listening": null,
+    "phases": [],
+    "plan": {},
+    "project": {
+      "created_at": "<TS>",
+      "cwd": "<HOME>/app",
+      "name": "app",
+      "prompted": true,
+      "summary": ""
+    },
+    "questions": [],
+    "remote": null,
+    "reviews": [],
+    "specs": {},
+    "stage": "active",
+    "template": "single",
+    "version": 1
+  }
+}

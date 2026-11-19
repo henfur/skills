@@ -1,0 +1,186 @@
+{
+  "chat": [],
+  "config": {
+    "exists": true,
+    "id": "<SOFT>",
+    "name": "Proj",
+    "path": "<HOME>/proj/.lacarta/config.json",
+    "warnings": []
+  },
+  "derived": {
+    "agent_status": {
+      "A-1": "waiting"
+    },
+    "blocked": null,
+    "listening": false,
+    "next": "Finish writing the specs: .lacarta/specs/functional.md, .lacarta/specs/architecture.md, .lacarta/specs/stack.md, .lacarta/specs/security.md still have TODOs.",
+    "open_findings": {
+      "critical": 0,
+      "high": 0,
+      "info": 0,
+      "low": 0,
+      "medium": 1
+    },
+    "open_questions": 1,
+    "pending_messages": 0,
+    "phases_done": 0,
+    "remote": true,
+    "spec_review": "none",
+    "specs_approved": 0
+  },
+  "id": "<SOFT>",
+  "reports": {},
+  "specs": {
+    "architecture": "# Proj: architecture and software design\n\n## 1. Context\n\nTODO: the system and everything it talks to (users, external services, data stores), drawn as a ```` ```mermaid ```` `flowchart` (the console renders it).\n\n## 2. Components\n\n| Component | Responsibility | Depends on | Owns data |\n| --- | --- | --- | --- |\n| TODO | | | |\n\n## 3. Data model\n\nTODO: entities, key fields, relationships, and invariants the code must keep. Draw the entities as a ```` ```mermaid ```` `erDiagram`.\n\n## 4. Interfaces\n\nTODO: public APIs, CLI commands, events and file formats, with request and response shapes and error behaviour.\n\n## 5. Key flows\n\nTODO: how the components cooperate for the main functional requirements (reference FR IDs). One ```` ```mermaid ```` `sequenceDiagram` per non-trivial flow.\n\n## 6. Cross-cutting concerns\n\n- Configuration: TODO\n- Error handling: TODO\n- Logging and observability: TODO\n- Testing strategy (unit, integration, end to end; what must be covered): TODO\n\n## 7. Design decisions\n\nOne entry per decision that would be expensive to reverse.\n\n### AD-1: TODO title\n\n- Context: TODO\n- Decision: TODO\n- Alternatives considered: TODO\n- Consequences: TODO\n\n## 8. Repository layout\n\nTODO: the folder structure the implementation will follow.\n",
+    "functional": "# Proj: functional specification\n\n## 1. Purpose\n\nTODO: the problem in two or three sentences, who has it, and what changes for them once this exists.\n\n## 2. Users and roles\n\n| Role | Who they are | What they can do |\n| --- | --- | --- |\n| TODO | | |\n\n## 3. Scope\n\n**In scope**\n\n- TODO\n\n**Out of scope** (explicitly not built, so nobody assumes it)\n\n- TODO\n\n## 4. Functional requirements\n\nEach requirement has a stable ID, a priority (must / should / could) and acceptance criteria a reviewer can check against the running code.\n\n### FR-1: TODO title\n\n- Priority: must\n- Description: TODO\n- Acceptance criteria:\n  - [ ] TODO: Given …, when …, then …\n\n## 5. User flows\n\nTODO: the main journeys, step by step, including what the user sees when something fails.\n\n## 6. Data\n\nTODO: what the system stores, where it comes from, how long it is kept, who owns it.\n\n## 7. Non-functional requirements\n\n| ID | Area | Requirement | How it is checked |\n| --- | --- | --- | --- |\n| NFR-1 | Performance | TODO | |\n| NFR-2 | Availability | TODO | |\n| NFR-3 | Accessibility | TODO | |\n\n## 8. Assumptions and open questions\n\nTODO: what this spec takes for granted. Every open question goes to the console with `ask`, and its answer is folded back into this file.\n",
+    "security": "# Proj: security specification and threat model\n\n## 1. Assets\n\nWhat an attacker would want, and what a failure would cost.\n\n| ID | Asset | Confidentiality | Integrity | Availability |\n| --- | --- | --- | --- | --- |\n| A-1 | TODO | high / medium / low | | |\n\n## 2. Actors and trust levels\n\n| Actor | Trust | Can reach |\n| --- | --- | --- |\n| Anonymous internet user | none | TODO |\n| TODO | | |\n\n## 3. Trust boundaries and data flows\n\nTODO: every place data crosses from a less trusted zone to a more trusted one (network edge, API, file upload, third-party callback, build pipeline). Name the flows: DF-1, DF-2… Draw them as a ```` ```mermaid ```` `flowchart` with one `subgraph` per trust zone and the DF IDs as edge labels.\n\n## 4. Threats (STRIDE)\n\nWalk each data flow and component through Spoofing, Tampering, Repudiation, Information disclosure, Denial of service and Elevation of privilege. Rate likelihood and impact, then derive the severity with the scale in section 7.\n\n| ID | Component / flow | STRIDE | Threat | Likelihood | Impact | Severity | Mitigation (SR) |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| T-1 | TODO | | | | | | |\n\n## 5. Security requirements\n\nTestable statements the reviews check, one per mitigation.\n\n| ID | Requirement | Mitigates | Verified by |\n| --- | --- | --- | --- |\n| SR-1 | TODO | T-1 | test / review / tool |\n\nCover at least, or mark \"Not applicable: reason\":\n\n- Authentication and session handling: TODO\n- Authorisation (who may do what, checked where): TODO\n- Input validation and output encoding: TODO\n- Secrets management (nothing in the repo, how they are injected): TODO\n- Cryptography (at rest, in transit, which libraries): TODO\n- Logging and audit (what is logged, what never is): TODO\n- Dependency and supply chain: TODO\n- Error handling (no stack traces or internals to users): TODO\n\n## 6. Accepted risks\n\nRisks deliberately not mitigated. Each one is backed by a decision in the console.\n\n| ID | Risk | Why accepted | Decision |\n| --- | --- | --- | --- |\n| None yet | | | |\n\n## 7. Severity scale\n\nThe reviews use this scale. High and critical stop development until the user decides.\n\n- **Critical**: exploitable remotely with no or trivial preconditions, leading to full compromise, code execution, broad data exposure or leaked production secrets.\n- **High**: serious impact with a realistic precondition (an authenticated user, a specific configuration): authorisation bypass, injection, account takeover, sensitive data exposure.\n- **Medium**: limited impact, or hard to exploit: a missing hardening measure the spec requires, information leaks that aid an attack, denial of service by a privileged user.\n- **Low**: defence in depth or best-practice gaps with no direct exploit path.\n- **Info**: observations, no risk on their own.\n",
+    "stack": "# Proj: tech stack\n\n## 1. Choices\n\n| Layer | Choice | Version | Why this one | Rejected alternatives |\n| --- | --- | --- | --- | --- |\n| Language | TODO | | | |\n| Framework | TODO | | | |\n| Storage | TODO | | | |\n| Testing | TODO | | | |\n| Build / packaging | TODO | | | |\n| Hosting / runtime | TODO | | | |\n\n## 2. Dependencies\n\nTODO: third-party libraries with pinned versions and their licences.\n\n**Dependency policy**: TODO (pinning, lockfile committed, how new dependencies are approved, how they are kept up to date and scanned for vulnerabilities).\n\n## 3. Tooling\n\n- Formatter and linter: TODO\n- Static analysis / security scanning: TODO\n- CI: TODO\n\n## 4. Environments\n\nTODO: local, test and production; how configuration and secrets reach each one.\n\n## 5. Constraints\n\nTODO: platform, licence, budget, performance or compliance constraints that drove these choices.\n"
+  },
+  "state": {
+    "activity": [
+      {
+        "agent": "A-1",
+        "at": "<TS>",
+        "kind": "stage",
+        "text": "Project Proj initialised."
+      },
+      {
+        "agent": "A-1",
+        "at": "<TS>",
+        "kind": "agent",
+        "text": "Jerry connected (claude-code session)."
+      },
+      {
+        "agent": "A-1",
+        "at": "<TS>",
+        "kind": "agent",
+        "text": "Jerry connected (claude-code session)."
+      },
+      {
+        "agent": "A-1",
+        "at": "<TS>",
+        "kind": "question",
+        "text": "Q-1 asked: Stack?"
+      }
+    ],
+    "agents": [
+      {
+        "avatar": null,
+        "finished_at": null,
+        "id": "A-1",
+        "model": "opus",
+        "name": "Jerry",
+        "phase": null,
+        "role": "orchestrator",
+        "session": {
+          "cli": "claude-code",
+          "cwd": "<HOME>/proj",
+          "ended_at": null,
+          "id": "s-2",
+          "started_at": "<TS>",
+          "transcript": ""
+        },
+        "started_at": "<TS>",
+        "status": "working",
+        "summary": "",
+        "task": "Runs the framework and talks to you.",
+        "updated_at": "<TS>"
+      }
+    ],
+    "attention": null,
+    "counters": {
+      "Q": 1
+    },
+    "decisions": [],
+    "findings": [
+      {
+        "at": "<TS>",
+        "detail": "",
+        "found_by": null,
+        "id": "F-1",
+        "location": "",
+        "phase": "spec",
+        "recommendation": "",
+        "resolution": "",
+        "resolved_at": null,
+        "review": "specification",
+        "scenario": "",
+        "severity": "medium",
+        "status": "open",
+        "title": "Gap"
+      }
+    ],
+    "inbox": [],
+    "listening": null,
+    "phases": [],
+    "plan": {
+      "status": "draft"
+    },
+    "project": {
+      "created_at": "<TS>",
+      "name": "Proj",
+      "summary": ""
+    },
+    "questions": [
+      {
+        "allow_free": true,
+        "answer": null,
+        "asked_at": "<TS>",
+        "asked_by": "A-1",
+        "body": "Pick **one**.",
+        "context": {
+          "spec": "stack",
+          "stage": "specification"
+        },
+        "effect": null,
+        "id": "Q-1",
+        "kind": "question",
+        "option_help": {
+          "Go": "Simple"
+        },
+        "options": [
+          "Go",
+          "Rust"
+        ],
+        "status": "open",
+        "thread": [],
+        "title": "Stack?"
+      }
+    ],
+    "remote": null,
+    "reviews": [],
+    "specs": {
+      "architecture": {
+        "approved_at": null,
+        "approved_revision": null,
+        "revision": 0,
+        "status": "draft",
+        "title": "Architecture \u0026 design"
+      },
+      "functional": {
+        "approved_at": null,
+        "approved_revision": null,
+        "revision": 0,
+        "status": "draft",
+        "title": "Functional"
+      },
+      "security": {
+        "approved_at": null,
+        "approved_revision": null,
+        "revision": 0,
+        "status": "draft",
+        "title": "Security \u0026 threat model"
+      },
+      "stack": {
+        "approved_at": null,
+        "approved_revision": null,
+        "revision": 0,
+        "status": "draft",
+        "title": "Tech stack"
+      }
+    },
+    "stage": "specification",
+    "template": "software",
+    "version": 1
+  }
+}

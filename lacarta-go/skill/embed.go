@@ -1,10 +1,13 @@
-// Package skill embeds what lacarta installs for agents: the spec templates that `init` copies
-// into a new project, the review desk's guide, default instructions and comment templates, and the incident-response
-// guide and report templates.
-// The whole skill moves here in phase 4 of the port.
+// Package skill embeds what lacarta installs for agents: the lacarta skill itself (SKILL.md and its
+// references, written to ~/.claude/skills/lacarta by `install`), the spec templates that `init`
+// copies into a new project, the review desk's guide, default instructions and comment templates,
+// and the incident-response guide and report templates.
 package skill
 
 import "embed"
+
+//go:embed SKILL.md references/*.md
+var Agent embed.FS
 
 //go:embed templates/*.md
 var Templates embed.FS

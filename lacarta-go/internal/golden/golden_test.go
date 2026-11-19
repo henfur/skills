@@ -1,20 +1,22 @@
-// Package golden runs scripted scenarios against a lacarta implementation and compares the
-// output with recordings. Recordings come from the Python prototype, so passing means the Go
-// binary behaves exactly like it:
+// Package golden runs scripted scenarios against the lacarta binary and compares the output with
+// recordings. The first recordings came from the Python prototype, so they pin the behaviour agents
+// rely on; an intended change is re-recorded and its diff read line by line:
 //
-//	GOLDEN_IMPL=python GOLDEN_RECORD=1 go test ./internal/golden   # record from the prototype
-//	go test ./internal/golden                                      # check the Go binary
+//	GOLDEN_RECORD=1 go test -count=1 ./internal/golden   # record
+//	go test -count=1 ./internal/golden                   # check
 //
-// Scenario lines: `$ <lacarta args>` runs lacarta, `% <lacarta args>` always runs the prototype
-// (so Go and Python read each other's state files), `> <shell>` runs sh in the work folder,
-// `@env <file>` loads `export K=V` lines into the environment, `@set K=V` and `@unset K` change
-// it, `#` starts a comment. A `$`/`%` line may end with ` <<< <text>`: the command's stdin.
-// $VARS are expanded from that environment.
+// Scenario lines: `$ <lacarta args>` runs lacarta, `> <shell>` runs sh in the work folder (with
+// $L, the binary), `@env <file>` loads `export K=V` lines into the environment, `@set K=V` and
+// `@unset K` change it, `@message <text>` queues a console message for $LACARTA_PROJECT,
+// `@old-models <state file>` rewrites a state file the way lacarta wrote it before models moved
+// to the config file, `#` starts a comment. A `$` line may end with ` <<< <text>`: the command's
+// stdin. $VARS are expanded from that environment.
 package golden
 
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +26,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"lacarta/internal/core"
 )
 
 var bin string
@@ -33,28 +37,21 @@ func repoDir() string {
 	return filepath.Join(filepath.Dir(file), "..", "..")
 }
 
-func pythonCLI() []string {
-	return []string{"python3", filepath.Join(repoDir(), "..", "lacarta", "scripts", "lacarta.py")}
-}
-
 func TestMain(m *testing.M) {
-	if os.Getenv("GOLDEN_IMPL") != "python" {
-		dir, err := os.MkdirTemp("", "lacarta-bin")
-		if err != nil {
-			panic(err)
-		}
-		bin = filepath.Join(dir, "lacarta")
-		build := exec.Command("go", "build", "-o", bin, "./cmd/lacarta")
-		build.Dir = repoDir()
-		if out, err := build.CombinedOutput(); err != nil {
-			fmt.Fprintf(os.Stderr, "build failed: %s\n%s", err, out)
-			os.Exit(1)
-		}
-		code := m.Run()
-		_ = os.RemoveAll(dir) // a deferred call would never run before os.Exit
-		os.Exit(code)
+	dir, err := os.MkdirTemp("", "lacarta-bin")
+	if err != nil {
+		panic(err)
 	}
-	os.Exit(m.Run())
+	bin = filepath.Join(dir, "lacarta")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/lacarta")
+	build.Dir = repoDir()
+	if out, err := build.CombinedOutput(); err != nil {
+		fmt.Fprintf(os.Stderr, "build failed: %s\n%s", err, out)
+		os.Exit(1)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir) // a deferred call would never run before os.Exit
+	os.Exit(code)
 }
 
 func TestScenarios(t *testing.T) {
@@ -75,10 +72,10 @@ func TestScenarios(t *testing.T) {
 			}
 			want, err := os.ReadFile(goldenPath)
 			if err != nil {
-				t.Fatalf("no recording (run with GOLDEN_IMPL=python GOLDEN_RECORD=1): %v", err)
+				t.Fatalf("no recording (run with GOLDEN_RECORD=1): %v", err)
 			}
 			if got != string(want) {
-				t.Errorf("output differs from the prototype's recording:\n%s", diff(string(want), got))
+				t.Errorf("output differs from the recording:\n%s", diff(string(want), got))
 			}
 		})
 	}
@@ -99,12 +96,9 @@ func runScenario(t *testing.T, name, path string) string {
 	env := map[string]string{
 		"LACARTA_HOME": home, "LACARTA_NO_DAEMON": "1", "W": work, "HOME": os.Getenv("HOME"),
 		"PATH": os.Getenv("PATH"), "LANG": "C.UTF-8", "CLAUDE_CONFIG_DIR": filepath.Join(home, "claude"),
-		"PYLACARTA": pythonCLI()[1], // scenarios use the prototype's hooks until the Go ones exist
+		"L": bin,
 	}
-	cli := pythonCLI()
-	if bin != "" {
-		cli = []string{bin}
-	}
+	cli := []string{bin}
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -115,18 +109,14 @@ func runScenario(t *testing.T, name, path string) string {
 	for sc.Scan() {
 		line := sc.Text()
 		switch {
-		case strings.HasPrefix(line, "$ "), strings.HasPrefix(line, "% "):
+		case strings.HasPrefix(line, "$ "):
 			text, stdin, _ := strings.Cut(line[2:], " <<< ")
 			expand := func(v string) string { return os.Expand(v, func(k string) string { return env[k] }) }
 			args, err := split(expand(text))
 			if err != nil {
 				t.Fatalf("%s: %v", line, err)
 			}
-			run := cli
-			if line[0] == '%' { // always the prototype: the two implementations share state files
-				run = pythonCLI()
-			}
-			cmd := exec.Command(run[0], append(run[1:], args...)...)
+			cmd := exec.Command(cli[0], append(cli[1:], args...)...)
 			cmd.Dir, cmd.Env = work, envList(env)
 			cmd.Stdin = strings.NewReader(expand(stdin))
 			var so, se bytes.Buffer
@@ -155,6 +145,10 @@ func runScenario(t *testing.T, name, path string) string {
 		case strings.HasPrefix(line, "@set "):
 			k, v, _ := strings.Cut(line[5:], "=")
 			env[k] = os.Expand(v, func(k string) string { return env[k] })
+		case strings.HasPrefix(line, "@message "):
+			queueMessage(t, env, strings.TrimSpace(line[9:]))
+		case strings.HasPrefix(line, "@old-models "):
+			oldModels(t, filepath.Join(work, strings.TrimSpace(line[12:])))
 		case strings.HasPrefix(line, "@unset "):
 			delete(env, strings.TrimSpace(line[7:]))
 		case strings.HasPrefix(line, "@env "):
@@ -173,6 +167,57 @@ func runScenario(t *testing.T, name, path string) string {
 		t.Fatal(err)
 	}
 	return normalize(out.String(), work, cli)
+}
+
+// queueMessage does what the console does when the user writes in Chat.
+func queueMessage(t *testing.T, env map[string]string, text string) {
+	t.Setenv("LACARTA_HOME", env["LACARTA_HOME"])
+	s, err := core.ProjectStore(env["LACARTA_PROJECT"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Edit(func(st *core.State) error { _, err := core.AddMessage(st, text); return err }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// oldModels turns a state file into one written before models moved to the config file: no
+// template or inbox, models confirmed per project, and the setup question still open. Keys keep
+// their order, as lacarta reads some maps in file order.
+func oldModels(t *testing.T, path string) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st core.OMap[json.RawMessage]
+	var questions []json.RawMessage
+	var counters core.OMap[int]
+	if err := json.Unmarshal(b, &st); err != nil {
+		t.Fatal(err)
+	}
+	q, _ := st.Get("questions")
+	c, _ := st.Get("counters")
+	if json.Unmarshal(q, &questions) != nil || json.Unmarshal(c, &counters) != nil {
+		t.Fatalf("%s: unexpected questions or counters", path)
+	}
+	st.Delete("template")
+	st.Delete("inbox")
+	st.Set("models", json.RawMessage(`{"confirmed": false, "roles": {"orchestrator": "opus"}}`))
+	questions = append(questions, json.RawMessage(`{"id": "Q-1", "kind": "validation", "title": "Choose the models for this project", `+
+		`"body": "", "options": ["Use these models"], "allow_free": false, "context": {"stage": "specification"}, `+
+		`"effect": {"type": "models-confirm"}, "status": "open", "asked_at": "2026-11-01T00:00:00Z", "answer": null}`))
+	counters.Set("Q", 1)
+	qb, _ := json.Marshal(questions)
+	cb, _ := json.Marshal(counters)
+	st.Set("questions", qb)
+	st.Set("counters", cb)
+	out, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func envList(env map[string]string) []string {
@@ -197,7 +242,6 @@ var (
 
 func normalize(s, work string, cli []string) string {
 	s = strings.ReplaceAll(s, strings.Join(cli, " "), "<L>")
-	s = strings.ReplaceAll(s, strings.Join(pythonCLI(), " "), "<L>")
 	s = strings.ReplaceAll(s, work, "<W>")
 	s = reTime.ReplaceAllString(s, "<TS>")
 	s = reTask.ReplaceAllString(s, "<TASK>")

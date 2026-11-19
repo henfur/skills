@@ -20,7 +20,7 @@ Spawn **one new subagent**, with the `spec_review` model from `models`, and only
 You are an independent specification reviewer. You have never seen this project and you know
 nothing about the conversations that produced its specification. Repository: {ROOT}.
 Your name is {NAME}.
-Lacarta CLI: python3 {L}
+Lacarta CLI: {L}
 
 Your job: decide whether this specification is complete and coherent enough that a competent
 team could build it without coming back with questions, and that nobody would build the wrong
@@ -28,8 +28,8 @@ thing from it.
 
 Read, and only read:
 - .lacarta/specs/functional.md, architecture.md, stack.md, security.md
-- the phase plan: python3 {L} status
-- the decision log: python3 {L} decisions
+- the phase plan: {L} status
+- the decision log: {L} decisions
 Do not read .lacarta/reviews/ or earlier review reports. Do not ask anyone for context.
 
 Check:
@@ -74,17 +74,17 @@ Write your report to {REPORT_PATH}:
   - Question for the user, or proposed fix
 
 Then record it:
-  python3 {L} review add --phase spec --type specification --verdict pass|fail \
+  {L} review add --phase spec --type specification --verdict pass|fail \
     --report {REPORT_PATH} --summary "..." --reviewer fresh-agent
 and each finding:
-  python3 {L} finding add --phase spec --review specification --spec <file> \
+  {L} finding add --phase spec --review specification --spec <file> \
     --severity ... --title ... --detail ... --location "<file> §<section>" \
     --scenario "<what goes wrong if built as written>" --recommendation "<the spec change>"
   (--scenario and --recommendation are required for high and critical.)
 Verdict is fail if any finding is medium or above.
 ```
 
-Fill `{ROOT}`, `{NAME}` and `{L}` (from `agent start`: the absolute path to `lacarta.py` followed by `--agent <id>`) and `{REPORT_PATH}` (for example `/tmp/lacarta-spec-review.md`).
+Fill `{ROOT}`, `{NAME}` and `{L}` (from `agent start`: the path to `lacarta` followed by `--agent <id>`) and `{REPORT_PATH}` (for example `/tmp/lacarta-spec-review.md`).
 
 ## After the review
 

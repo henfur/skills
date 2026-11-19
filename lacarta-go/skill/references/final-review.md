@@ -7,7 +7,7 @@ The final review answers one question: judged only by what is in the repository,
 1. Make sure the specs match what was built, including every decision taken along the way. A decision that never reached a spec file is invisible now.
 2. Make sure the README explains how to install, build, test and run the project.
 3. Commit everything if the project uses git, so the reviewers see a clean tree.
-4. `python3 $L final start`.
+4. `lacarta final start`.
 
 ## Running the reviewers
 
@@ -20,7 +20,7 @@ Each reviewer may run the two reviews' worth of work for as long as it needs. Ru
 ```text
 You are an independent functional reviewer. You have never seen this project before. Repository:
 {ROOT}. Your name is {NAME}.
-Lacarta CLI: python3 {L}
+Lacarta CLI: {L}
 
 Use only the repository content. Read the specifications in .lacarta/specs/ (they are the contract)
 and the code, tests and README. Do not read .lacarta/reviews/, .lacarta/state.json or the
@@ -37,9 +37,9 @@ decision log: they record earlier opinions you must not inherit. Do not run `sta
    (ID | status | evidence), then findings (severity, location, scenario, recommendation).
    Severity: critical (data loss or core feature broken), high (a must requirement unmet),
    medium (a should unmet or a must failing in edge cases), low (polish).
-6. Record: python3 {L} review add --phase final --type functional --verdict pass|fail
+6. Record: {L} review add --phase final --type functional --verdict pass|fail
    --report {REPORT_PATH} --summary "..." --reviewer fresh-agent
-   and for each finding: python3 {L} finding add --phase final --review functional
+   and for each finding: {L} finding add --phase final --review functional
    --severity ... --title ... --detail ... --location ... --scenario ... --recommendation ...
    (--scenario and --recommendation are required for high and critical.)
 Verdict is fail if any must requirement is not fully met or any finding is high or critical.
@@ -50,7 +50,7 @@ Verdict is fail if any must requirement is not fully met or any finding is high 
 ```text
 You are an independent security reviewer performing a full security audit. You have never seen
 this project before. Your name is {NAME}. Repository: {ROOT}.
-Lacarta CLI: python3 {L}
+Lacarta CLI: {L}
 
 Use only the repository content. Read .lacarta/specs/security.md (threat model, security
 requirements, accepted risks, severity scale) and .lacarta/specs/architecture.md, then the whole
@@ -70,9 +70,9 @@ codebase. Do not read .lacarta/reviews/, .lacarta/state.json or the decision log
    implementation is worse than what was accepted.
 5. Write your report to {REPORT_PATH}: verdict line, SR table (ID | status | evidence), attack
    surface notes, then findings (severity, location, scenario, recommendation).
-6. Record: python3 {L} review add --phase final --type security --verdict pass|fail
+6. Record: {L} review add --phase final --type security --verdict pass|fail
    --report {REPORT_PATH} --summary "..." --reviewer fresh-agent
-   and each finding with python3 {L} finding add --phase final --review security ...
+   and each finding with {L} finding add --phase final --review security ...
    (--scenario and --recommendation are required for high and critical.)
 Verdict is fail if any SR is unmet or any finding is medium or above.
 ```

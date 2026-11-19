@@ -69,9 +69,11 @@ func commands() []*Cmd {
 			{Name: "port", Kind: num, Help: "Default 4747."},
 			{Name: "host", Help: "Address to bind. Anything but loopback requires the key printed in the URL."},
 			{Name: "allow-host", Kind: list, Help: "Extra host name or IP the browser will use (LAN name, VPN IP); repeat."}}},
-		{Name: "install", Help: "Add the hooks that let Claude Code sessions join the console: those in tracked folders, and any you add with `track`.", Run: cmdInstall,
+		{Name: "install", Help: "Add the hooks that let Claude Code sessions join the console (those in tracked folders, and any you add " +
+			"with `track`), and the lacarta skill beside the settings file (skills/lacarta), kept in step with this binary.", Run: cmdInstall,
 			Opts: []Opt{{Name: "settings", Help: "Claude Code settings file (default: ~/.claude/settings.json)."},
-				{Name: "uninstall", Kind: flag, Help: "Remove the hooks instead."}}},
+				{Name: "uninstall", Kind: flag, Help: "Remove the hooks and the skill instead."},
+				{Name: "force", Kind: flag, Help: "Replace a skill folder lacarta didn't write (a link to a checkout, a copy)."}}},
 		{Name: "hook", Help: "Called by the CLI's hooks, with its JSON on stdin.", Run: cmdHook,
 			Pos: []Pos{{Name: "event", Choices: hookEvents()}}},
 		{Name: "inbox", Help: "Read the messages the user sent from the console (CLIs without hooks).", Run: cmdInbox},
@@ -292,7 +294,12 @@ func cmdListen(a *Args) error {
 	return hooks.Listen(store, a.Out, time.Duration(a.Int("timeout"))*time.Second)
 }
 
-func cmdInstall(a *Args) error { return hooks.Install(a.Str("settings"), a.Flag("uninstall"), a.Out) }
+func cmdInstall(a *Args) error {
+	if err := hooks.Install(a.Str("settings"), a.Flag("uninstall"), a.Out); err != nil {
+		return err
+	}
+	return hooks.InstallSkill(a.Str("settings"), a.Flag("uninstall"), a.Flag("force"), a.Out)
+}
 
 func cmdHook(a *Args) error {
 	hooks.Run(a.Positional("event"), os.Stdin, a.Out)
@@ -438,21 +445,36 @@ func cmdStatus(a *Args) error {
 		a.Println(string(out))
 		return nil
 	}
-	if st.Template == core.Audit {
-		return auditStatus(a, st, d)
+	if show, ok := kindStatus[st.Template]; ok {
+		return show(a, st, d)
 	}
-	if st.Template == core.Incident && st.Incident != nil {
-		return incidentStatus(a, st, d)
-	}
-	if st.Template == core.Single {
-		a.Printf("%s: single-agent task in %s, %s\n", st.Project.Name, st.Project.Cwd, st.Stage)
-		a.Printf("Remote control: %s; console messages waiting: %d\n", onOff(d.Remote), d.PendingMessages)
-		for _, q := range core.OpenQuestions(st) {
-			a.Printf("  %s [%s] %s\n", q.ID, q.Kind, q.Title)
+	return softwareStatus(a, st, d)
+}
+
+// kindStatus prints `status` for kinds with their own summary; the others (software projects,
+// and desks, whose summary is `desk status`) get the software project's.
+var kindStatus = map[string]func(a *Args, st *core.State, d *core.Derived) error{
+	core.Single: singleStatus,
+	core.Audit:  auditStatus,
+	core.Incident: func(a *Args, st *core.State, d *core.Derived) error {
+		if st.Incident == nil {
+			return softwareStatus(a, st, d)
 		}
-		a.Printf("\nNext: %s\n", d.Next)
-		return nil
+		return incidentStatus(a, st, d)
+	},
+}
+
+func singleStatus(a *Args, st *core.State, d *core.Derived) error {
+	a.Printf("%s: single-agent task in %s, %s\n", st.Project.Name, st.Project.Cwd, st.Stage)
+	a.Printf("Remote control: %s; console messages waiting: %d\n", onOff(d.Remote), d.PendingMessages)
+	for _, q := range core.OpenQuestions(st) {
+		a.Printf("  %s [%s] %s\n", q.ID, q.Kind, q.Title)
 	}
+	a.Printf("\nNext: %s\n", d.Next)
+	return nil
+}
+
+func softwareStatus(a *Args, st *core.State, d *core.Derived) error {
 	a.Printf("%s: stage %s\n", st.Project.Name, st.Stage)
 	if d.Blocked != nil {
 		a.Printf("BLOCKED: %s\n", *d.Blocked)

@@ -1,0 +1,277 @@
+{
+  "catalog": {
+    "kinds": {
+      "audit": {
+        "about": "Cloudflare's security-audit skill run end to end, a coverage plan you approve, your review of every finding, and a signed report you approve.",
+        "label": "Security audit",
+        "roles": {
+          "candidate_verifier": {
+            "about": "Fresh agent that tries to disprove each candidate. Use a different model from the hunters, so they check each other.",
+            "default": "sonnet",
+            "label": "Candidate verifier",
+            "stage": "Validation"
+          },
+          "coverage_critic": {
+            "about": "Fresh agent after each wave: finds gaps in the coverage, never findings.",
+            "default": "sonnet",
+            "label": "Coverage critic",
+            "stage": "Hunting"
+          },
+          "hunter": {
+            "about": "Hunts one coverage unit at a time for real boundary failures. Most of the audit's spend.",
+            "default": "opus",
+            "label": "Hunter",
+            "stage": "Hunting"
+          },
+          "orchestrator": {
+            "about": "The parent agent: runs the skill's workflow, owns the run files, talks to you. This is the Claude Code session itself: switch it with /model.",
+            "default": "opus",
+            "label": "Orchestrator",
+            "stage": "Whole audit"
+          },
+          "recon": {
+            "about": "Maps the architecture, trust boundaries and entry surfaces, and seeds the coverage ledger.",
+            "default": "sonnet",
+            "label": "Reconnaissance",
+            "stage": "Recon"
+          },
+          "record_verifier": {
+            "about": "Fresh agent that re-checks every final record against the source.",
+            "default": "sonnet",
+            "label": "Record verifier",
+            "stage": "Validation"
+          }
+        }
+      },
+      "desk": {
+        "about": "Watches merge requests on a forge and reviews them on a loop: one reviewer per profile (security, devops, code), comments from your templates, approvals only as the desk's policy and modes allow. Never merges.",
+        "label": "Review desk",
+        "roles": {
+          "orchestrator": {
+            "about": "Keeps `desk next` running, spawns one reviewer per profile for each merge request, then hands the records to lacarta. This is the Claude Code session itself: switch it with /model.",
+            "default": "sonnet",
+            "label": "Orchestrator",
+            "stage": "Whole desk"
+          },
+          "reviewer": {
+            "about": "Fresh subagent that reviews one merge request for one profile and writes its record. The profile's model, when the desk sets one, wins over this.",
+            "default": "sonnet",
+            "label": "Reviewer",
+            "stage": "Review"
+          },
+          "verifier": {
+            "about": "Fresh subagent that tries to disprove a blocking finding before it can block. Use a different model from the reviewers, so they check each other.",
+            "default": "opus",
+            "label": "Verifier",
+            "stage": "Review"
+          }
+        }
+      },
+      "incident": {
+        "about": "One case, a security incident or a vulnerability to respond to: its timeline, investigations, evidence, indicators and response actions, with situation reports along the way and a final report. You approve every action and every report.",
+        "label": "Incident response",
+        "roles": {
+          "challenger": {
+            "about": "Fresh agent that tries to disprove a confirmed conclusion. Use a different model from the investigators, so they check each other.",
+            "default": "opus",
+            "label": "Challenger",
+            "stage": "Investigation"
+          },
+          "investigator": {
+            "about": "Subagent that works one investigation: collects evidence, records what it finds, proposes a conclusion.",
+            "default": "sonnet",
+            "label": "Investigator",
+            "stage": "Investigation"
+          },
+          "orchestrator": {
+            "about": "Coordinates the response: keeps the timeline, opens investigations, proposes actions, drafts the reports and talks to you. This is the Claude Code session itself: switch it with /model.",
+            "default": "opus",
+            "label": "Coordinator",
+            "stage": "Whole case"
+          }
+        }
+      },
+      "single": {
+        "about": "One agent session on one task: its chat, questions and activity.",
+        "label": "Single agent",
+        "roles": {
+          "agent": {
+            "about": "The CLI session itself. Switch it in the terminal (`/model` in Claude Code); helpers it spawns use this model too.",
+            "default": "opus",
+            "label": "Agent",
+            "stage": "Session"
+          }
+        }
+      },
+      "software": {
+        "about": "Specs, a phase plan, phases gated by functional and security reviews, a final review.",
+        "label": "Software development",
+        "roles": {
+          "final_functional_review": {
+            "about": "Fresh agent that judges the whole repository against the specs.",
+            "default": "sonnet",
+            "label": "Final functional review",
+            "stage": "Final review"
+          },
+          "final_security_review": {
+            "about": "Fresh agent that audits the whole repository.",
+            "default": "opus",
+            "label": "Final security review",
+            "stage": "Final review"
+          },
+          "functional_review": {
+            "about": "Reviews each phase against the functional spec and architecture.",
+            "default": "sonnet",
+            "label": "Functional review",
+            "stage": "Implementation"
+          },
+          "implementation": {
+            "about": "Subagent that builds each phase's scope and its tests.",
+            "default": "opus",
+            "label": "Implementation",
+            "stage": "Implementation"
+          },
+          "orchestrator": {
+            "about": "Runs the framework, writes the specs, talks to you and coordinates the other agents. This is the Claude Code session itself: switch it with /model.",
+            "default": "opus",
+            "label": "Orchestrator",
+            "stage": "Whole project"
+          },
+          "security_review": {
+            "about": "Reviews each phase against the threat model and hunts for vulnerabilities.",
+            "default": "opus",
+            "label": "Security review",
+            "stage": "Implementation"
+          },
+          "spec_review": {
+            "about": "Fresh agent that checks the complete spec set for gaps and incoherences.",
+            "default": "sonnet",
+            "label": "Specification review",
+            "stage": "Specification"
+          }
+        }
+      }
+    },
+    "models": {
+      "fable": {
+        "id": "claude-fable-5-1",
+        "name": "Fable 5.1"
+      },
+      "haiku": {
+        "id": "claude-haiku-5-5",
+        "name": "Haiku 5.5"
+      },
+      "opus": {
+        "id": "claude-opus-5-5",
+        "name": "Opus 5.5"
+      },
+      "sonnet": {
+        "id": "claude-sonnet-5-5",
+        "name": "Sonnet 5.5"
+      }
+    },
+    "planned": [
+      "DevOps (Ansible, Terraform)"
+    ]
+  },
+  "projects": [
+    {
+      "active": true,
+      "agent": {
+        "avatar": null,
+        "id": "A-1",
+        "name": "Jerry"
+      },
+      "archived": false,
+      "attention": null,
+      "blocked": null,
+      "empty": false,
+      "id": "<TASK>",
+      "last_seen": "<TS>",
+      "listening": false,
+      "listening_since": null,
+      "moved_to": null,
+      "name": "app",
+      "questions": [],
+      "session": true,
+      "stage": "active",
+      "status": "working",
+      "template": "single",
+      "updated_at": "<TS>",
+      "where": "<HOME>/app"
+    },
+    {
+      "active": true,
+      "agent": {
+        "avatar": null,
+        "id": "A-1",
+        "name": "Jerry"
+      },
+      "archived": false,
+      "attention": null,
+      "blocked": null,
+      "empty": false,
+      "id": "<SOFT>",
+      "last_seen": "<TS>",
+      "listening": false,
+      "listening_since": null,
+      "moved_to": null,
+      "name": "Proj",
+      "questions": [
+        {
+          "asked_by": "Jerry",
+          "id": "Q-1",
+          "replies": 0,
+          "title": "Stack?",
+          "triage": false
+        }
+      ],
+      "session": true,
+      "stage": "specification",
+      "status": "waiting",
+      "template": "software",
+      "updated_at": "<TS>",
+      "where": "<HOME>/proj"
+    }
+  ],
+  "settings": {
+    "config": {
+      "exists": false,
+      "path": "<HOME>/config.json",
+      "warnings": []
+    },
+    "models": {
+      "audit": {
+        "candidate_verifier": "sonnet",
+        "coverage_critic": "sonnet",
+        "hunter": "opus",
+        "orchestrator": "opus",
+        "recon": "sonnet",
+        "record_verifier": "sonnet"
+      },
+      "desk": {
+        "orchestrator": "sonnet",
+        "reviewer": "sonnet",
+        "verifier": "opus"
+      },
+      "incident": {
+        "challenger": "opus",
+        "investigator": "sonnet",
+        "orchestrator": "opus"
+      },
+      "single": {
+        "agent": "opus"
+      },
+      "software": {
+        "final_functional_review": "sonnet",
+        "final_security_review": "opus",
+        "functional_review": "sonnet",
+        "implementation": "opus",
+        "orchestrator": "opus",
+        "security_review": "opus",
+        "spec_review": "sonnet"
+      }
+    },
+    "remote_control": true
+  }
+}

@@ -2,8 +2,8 @@
 
 Status: **first version implemented** (2026-11-13). See "Implementation status" below for what was built, how it differs
 from this design, and what is left.
-[handoff](../../../docs/next-steps.md) and the first real test of the `Kind` interface sketched in
-[go-port-plan.md](../../../docs/go-port-plan.md#kinds).
+[handoff](../../../docs/next-steps.md) and the first real test of the `Kind` interface, now in
+`internal/core/kinds.go` (architecture spec, AD-6).
 
 Sources:
 - [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), commit `c1c8a8c` (2026-09-14). It is already

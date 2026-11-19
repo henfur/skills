@@ -20,20 +20,20 @@ Go module: no third-party dependencies. Keep it that way unless a dependency rem
 
 Console: `svelte` 5.57.3, `vite` 6.4.6, `@sveltejs/vite-plugin-svelte` 5.1.1, `marked` 12.0.2, `dompurify` 3.1.6, `mermaid` 10.9.1 (loaded only on pages with a diagram), `@playwright/test` 1.64.1. Exact versions in `package.json`, `bun.lock` committed. DOMPurify and marked have newer releases; upgrading is fine once the Playwright suite passes.
 
-External programs: none at runtime. Tests use `python3` while the prototype exists (golden recordings, `TestAPIParity`).
+External programs: none at runtime, none in the Go tests (the console's tests need Bun and Playwright's browsers).
 
 ## 3. Tooling
 
 - Format and vet: `gofmt -w .`, `go vet ./...`.
 - Lint: `golangci-lint run ./...` (installed on the dev machine). Unchecked writes to stdout and deferred `Close` are accepted; anything else should be fixed.
-- Tests: `go test ./...`. Re-record goldens from the prototype: `GOLDEN_IMPL=python GOLDEN_RECORD=1 go test ./internal/golden`; after phase 4, re-record with Go (`GOLDEN_RECORD=1 go test ./internal/golden`) and review the diff.
+- Tests: `go test ./...`. Re-record goldens: `GOLDEN_RECORD=1 go test -count=1 ./internal/golden ./internal/server`, and review the diff.
 - Console: `bun install`, `bun run build` (output `web/dist/`, commit it), `bun run build --watch` with a daemon started with `LACARTA_WEB_DIR=web/dist`, `bunx playwright test` (see the README for the NixOS browser path).
 
 ## 4. Environments
 
 - Development: NixOS, Go 1.26 from the system; Bun through `nix shell nixpkgs#bun` (not installed globally). A `flake.nix` or `shell.nix` providing `go`, `bun` and `golangci-lint` would make this one command.
 - The user's machine runs the Go binary as `~/.local/bin/lacarta` with hooks installed in `~/.claude/settings.json` and the console on `127.0.0.1:4747`. Never test against that home or port: use a temporary `LACARTA_HOME`, `CLAUDE_CONFIG_DIR` and a free port.
-- The machine's `python3` is a wrapper that needs the real `HOME`; tests isolate lacarta with `LACARTA_HOME` instead of `HOME`, and set `LANG=C.UTF-8`.
+- Tests isolate lacarta with `LACARTA_HOME` and `CLAUDE_CONFIG_DIR` instead of `HOME`, and set `LANG=C.UTF-8`.
 
 ## 5. Constraints
 

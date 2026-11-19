@@ -1,34 +1,34 @@
 # lacarta (Go)
 
-The Go port of lacarta: one binary for the CLI, the hooks, the daemon and the console. Plan and progress: [`../docs/go-port-plan.md`](../docs/go-port-plan.md). What to do next: [`../docs/next-steps.md`](../docs/next-steps.md). Specification of the system: [`docs/specs/`](docs/specs/) (functional, architecture, stack, security).
+One binary for the CLI, the hooks, the daemon, the console and the skill agents read. What to do next: [`../docs/next-steps.md`](../docs/next-steps.md). Specification of the system: [`docs/specs/`](docs/specs/) (functional, architecture, stack, security).
 
-**Status: phases 1 to 3 done.** The binary replaces the Python prototype (`../lacarta/scripts/lacarta.py`) entirely: every command, every hook, `install`, and the console daemon with its Svelte console.
+The Python prototype it replaced is gone; its state files, hooks and projects carry over as they are (`install` replaces the prototype's hooks).
 
-To switch a machine from the prototype: stop its console, then `go build -o ~/.local/bin/lacarta ./cmd/lacarta && lacarta install` (replaces the prototype's hooks), and restart running sessions. State files are shared, so projects carry over as they are.
+To install or update on a machine: `go build -o ~/.local/bin/lacarta ./cmd/lacarta && lacarta install`, then restart running sessions. `install` adds the hooks to `~/.claude/settings.json` and writes the skill to `~/.claude/skills/lacarta`. Sessions refresh that copy when the binary carries a newer one; a folder lacarta didn't write there (a link to this checkout, for development) is left alone unless `--force`.
 
 ```bash
 go build -o lacarta ./cmd/lacarta
 ./lacarta --help
 ```
 
-## Parity with the prototype
+## Golden recordings
 
-`internal/golden` runs the scenarios in `testdata/scenarios/` and compares the output with recordings made from the prototype:
+`internal/golden` runs the scenarios in `testdata/scenarios/` and compares the output with `testdata/golden/*.out`; `internal/server` compares the console API with `testdata/golden/api/*.json`. The first recordings came from the Python prototype, so they pin what agents and the console rely on:
 
 ```bash
-go test ./...                                                   # check the Go binary
-GOLDEN_IMPL=python GOLDEN_RECORD=1 go test ./internal/golden    # re-record from the prototype
+go test -count=1 ./...                        # check (-count=1: the goldens run a freshly built binary)
+GOLDEN_RECORD=1 go test -count=1 ./internal/golden ./internal/server   # re-record
 ```
 
-Scenario lines: `$ <args>` runs the implementation under test, `% <args>` always runs the prototype (Go and Python then alternate on the same state files), `> <shell>` prepares files, `@env <file>` loads `export K=V` lines. Timestamps, task ids, paths and the CLI's own path are normalised.
+Scenario lines: `$ <args>` runs lacarta, `> <shell>` prepares files (`$L` is the binary), `@env <file>` loads `export K=V` lines, `@message <text>` queues a console message, `@old-models <file>` rewrites a state file the way older versions wrote it. Timestamps, task ids, paths and the CLI's own path are normalised.
 
-Re-record only when the prototype's behaviour changes on purpose, and read the diff of `testdata/golden/` before committing it: the recordings are the specification.
+Re-record only when behaviour changes on purpose, and read the diff before committing it: the recordings are the specification.
 
 ## Layout
 
 ```
 cmd/lacarta/       main
-internal/core/     state files, locking, migration, hub, config files, questions, gates, sessions
+internal/core/     state files, locking, migration, hub, config files, questions, gates, sessions; kinds.go: each kind's Behaviour
 internal/cli/      argument parsing and commands (output is a contract: agents read it)
 internal/hooks/    hook events, transcript reader, install (Claude Code)
 internal/server/   console daemon and API
@@ -39,16 +39,14 @@ internal/plugins/  plugin registry, the security-audit skill as a required plugi
 internal/sandbox/  bubblewrap sandbox for target code, check tools and validators
 internal/auditreport/  audit report (markdown, print HTML, PDF), approval, verification
 internal/provenance/   Ed25519 report signing in OpenSSH's SSHSIG format
-internal/golden/   parity suite
-skill/             embedded files (spec templates now; the whole skill in phase 4)
+internal/golden/   golden scenarios
+skill/             embedded: the lacarta skill (SKILL.md, references/), spec templates, desk and incident guides
 web/app/           console source (Svelte 5, Vite, Bun); tests in web/app/tests/
 web/dist/          its build, committed and embedded
 testdata/          scenarios and recordings
 ```
 
-The spec templates in `skill/templates/` are copies of the prototype's (`../lacarta/assets/templates/`) until phase 4 removes it; change both.
-
-Besides the golden suite: `internal/hooks` tests the listening Stop hook (woken by a message, an answer or a "Talk about this" message; ended by remote control off or SIGTERM), the transcript reader and install; `internal/server` runs the prototype's daemon and the Go handler on the same state files and compares their JSON, then tests every action and the auth checks.
+Besides the golden suite: `internal/hooks` tests the listening Stop hook (woken by a message, an answer or a "Talk about this" message; ended by remote control off or SIGTERM), the transcript reader and install; `internal/server` checks the API against its recording, then tests every action and the auth checks.
 
 ## Security audits
 

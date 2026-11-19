@@ -25,9 +25,9 @@ Start from what the user already told you. Do not ask what you can infer or what
 Batch questions. Asking five related questions at once and then waiting for all of them respects the user's time more than five round trips:
 
 ```bash
-python3 $L ask --kind question --spec functional --title "Who signs in?" --body "..." --option "Only staff" --option "Staff and customers"
-python3 $L ask --kind decision --spec stack --title "Database" --body-file /tmp/db-options.md --option "PostgreSQL" --option "SQLite"
-python3 $L wait Q-1 Q-2      # background command; end your turn, the answers wake you
+lacarta ask --kind question --spec functional --title "Who signs in?" --body "..." --option "Only staff" --option "Staff and customers"
+lacarta ask --kind decision --spec stack --title "Database" --body-file /tmp/db-options.md --option "PostgreSQL" --option "SQLite"
+lacarta wait Q-1 Q-2      # background command; end your turn, the answers wake you
 ```
 
 Good questions for the console:
@@ -60,22 +60,22 @@ Split the work into phases that each end in something that runs and can be revie
 - Security requirements belong in the phase that builds the thing they protect, not in a "security hardening" phase at the end.
 
 ```bash
-python3 $L phase add --title "Skeleton and auth" --goal "A user can sign up, sign in and sign out." \
+lacarta phase add --title "Skeleton and auth" --goal "A user can sign up, sign in and sign out." \
   --scope "Project layout, CI, lint" --scope "Session auth" --covers FR-1 --covers SR-1 --covers SR-2
 ```
 
 ## Before the spec review
 
-Read the four specs once more, end to end, with `python3 $L decisions` open beside them, and make sure every decision is written into the spec it concerns. Then run the independent review as `references/spec-review.md` describes. Do not skip this self-check because a reviewer comes next: the reviewer's time is best spent on what you cannot see, not on what you could.
+Read the four specs once more, end to end, with `lacarta decisions` open beside them, and make sure every decision is written into the spec it concerns. Then run the independent review as `references/spec-review.md` describes. Do not skip this self-check because a reviewer comes next: the reviewer's time is best spent on what you cannot see, not on what you could.
 
 ## Approval
 
 After a passing spec review:
 
 ```bash
-for k in functional architecture stack security; do python3 $L spec submit $k; done
-python3 $L plan submit
-python3 $L wait Q-a Q-b Q-c Q-d Q-e   # background command; end your turn
+for k in functional architecture stack security; do lacarta spec submit $k; done
+lacarta plan submit
+lacarta wait Q-a Q-b Q-c Q-d Q-e   # background command; end your turn
 ```
 
 ## Change requests

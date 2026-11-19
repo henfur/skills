@@ -413,6 +413,63 @@ func TestInstall(t *testing.T) {
 	}
 }
 
+// The skill is written beside the settings file, kept in step with the binary, and a folder
+// lacarta didn't write (a link to a checkout) is left alone unless forced.
+func TestInstallSkill(t *testing.T) {
+	claude := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", claude)
+	settings := filepath.Join(claude, "settings.json")
+	dir := filepath.Join(claude, "skills", "lacarta")
+	var out bytes.Buffer
+	if err := InstallSkill(settings, false, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil || !strings.Contains(string(b), "name: lacarta") || strings.Contains(string(b), "python3") {
+		t.Fatalf("SKILL.md: %v %.200s", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "references", "review.md")); err != nil {
+		t.Fatal("the references are part of the skill")
+	}
+
+	// A stale copy (an older binary wrote it) is refreshed at the next session start.
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("old"), 0o644)
+	os.WriteFile(filepath.Join(dir, skillMark), []byte("old-hash\n"), 0o644)
+	SyncSkill()
+	if b, _ := os.ReadFile(filepath.Join(dir, "SKILL.md")); string(b) == "old" {
+		t.Error("a stale skill must be rewritten")
+	}
+
+	// A link to a checkout stays, unless forced; the checkout itself is never touched.
+	os.RemoveAll(dir)
+	checkout := t.TempDir()
+	os.WriteFile(filepath.Join(checkout, "SKILL.md"), []byte("mine"), 0o644)
+	os.Symlink(checkout, dir)
+	out.Reset()
+	if err := InstallSkill(settings, false, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	SyncSkill()
+	if to, _ := os.Readlink(dir); to != checkout || !strings.Contains(out.String(), "is a link to") {
+		t.Fatalf("the link must stay: %q %s", to, out.String())
+	}
+	if err := InstallSkill(settings, false, true, &out); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Lstat(dir); info.Mode()&os.ModeSymlink != 0 {
+		t.Error("--force replaces the link")
+	}
+	if b, _ := os.ReadFile(filepath.Join(checkout, "SKILL.md")); string(b) != "mine" {
+		t.Error("the checkout must be left as it was")
+	}
+	if err := InstallSkill(settings, true, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dir); err == nil {
+		t.Error("uninstall removes the skill lacarta wrote")
+	}
+}
+
 // ---------------------------------------------------------------- security audits
 
 // A single-agent session asked for an audit is told to start it through lacarta, so the console
@@ -606,5 +663,15 @@ func TestUntrackedSessionsStayOut(t *testing.T) {
 	os.MkdirAll(other, 0o755)
 	if out := runHook("session-start", fmt.Sprintf(`{"session_id":"u2","cwd":%q,"source":"startup"}`, other)); !strings.Contains(out, "is registered in the lacarta console") {
 		t.Errorf("auto_track: %s", out)
+	}
+}
+
+// Every kind but the single-agent task tells its session what to do first; a kind missing here
+// would get the single-agent task's brief.
+func TestEveryKindHasItsBrief(t *testing.T) {
+	for _, k := range core.Kinds {
+		if _, ok := kindBriefs[k.ID]; !ok {
+			t.Errorf("kind %q has no session brief in kindBriefs", k.ID)
+		}
 	}
 }

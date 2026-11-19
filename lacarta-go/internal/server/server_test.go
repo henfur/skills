@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -99,15 +98,6 @@ func goBin(t *testing.T) string {
 	return builtBin
 }
 
-func freePort(t *testing.T) int {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
-}
-
 func getJSON(t *testing.T, url string) any {
 	t.Helper()
 	resp, err := http.Get(url)
@@ -123,71 +113,60 @@ func getJSON(t *testing.T, url string) any {
 	return v
 }
 
-// dropAuditKind removes what was added after the prototype was frozen: the security-audit kind
-// and the review desk kind in the catalog, their models in the settings, the plugins, the config file's metadata, and the
-// fields the home page groups projects by.
-func dropAuditKind(hub any) {
-	h := hub.(map[string]any)
-	cat := h["catalog"].(map[string]any)
-	delete(cat["kinds"].(map[string]any), "audit")
-	delete(cat["kinds"].(map[string]any), "desk")
-	delete(cat["kinds"].(map[string]any), "incident")
-	cat["planned"] = append([]any{"Security audit"}, cat["planned"].([]any)...)
-	delete(h["settings"].(map[string]any)["models"].(map[string]any), "audit")
-	delete(h["settings"].(map[string]any)["models"].(map[string]any), "desk")
-	delete(h["settings"].(map[string]any)["models"].(map[string]any), "incident")
-	delete(h["settings"].(map[string]any), "config")
-	delete(h, "tools")
-	for _, p := range h["projects"].([]any) {
-		for _, k := range []string{"last_seen", "active", "empty"} {
-			delete(p.(map[string]any), k)
+// TestAPISnapshot pins what the console receives for a single-agent task and a software project:
+// the shapes the Svelte views read. The first recording was checked field by field against the
+// Python prototype's daemon. An intended change is re-recorded with GOLDEN_RECORD=1 and its diff read.
+func TestAPISnapshot(t *testing.T) {
+	home, taskID, softID := fixture(t)
+	srv := httptest.NewServer(Handler(Config{Token: token, Port: 0}))
+	defer srv.Close()
+	_, file, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(file), "..", "..", "testdata", "golden", "api")
+	for name, path := range map[string]string{"hub": "/api/hub", "task": "/api/p/" + taskID + "/state", "software": "/api/p/" + softID + "/state"} {
+		v := getJSON(t, srv.URL+path)
+		if name == "hub" { // what this machine has installed: tested in internal/plugins and cli
+			for _, k := range []string{"plugins", "tools", "skills"} {
+				delete(v.(map[string]any), k)
+			}
+		}
+		b, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := snapshotNormalize(string(b), home, taskID, softID) + "\n"
+		f := filepath.Join(dir, name+".json")
+		if os.Getenv("GOLDEN_RECORD") != "" {
+			_ = os.MkdirAll(dir, 0o755)
+			if err := os.WriteFile(f, []byte(got), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		want, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("no recording (run with GOLDEN_RECORD=1): %v", err)
+		}
+		var w, g any
+		_ = json.Unmarshal(want, &w)
+		_ = json.Unmarshal([]byte(got), &g)
+		if diffs := compare("", w, g); len(diffs) > 0 {
+			t.Errorf("%s differs from testdata/golden/api/%s.json:\n  %s", path, name, strings.Join(diffs, "\n  "))
 		}
 	}
-	delete(h, "plugins")
-	delete(h, "skills")
 }
 
-// TestAPIParity runs the prototype's daemon and the Go handler on the same state files and
-// compares what the console receives.
-func TestAPIParity(t *testing.T) {
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 not available")
-	}
-	_, taskID, softID := fixture(t)
-	_, file, _, _ := runtime.Caller(0)
-	proto := filepath.Join(filepath.Dir(file), "..", "..", "..", "lacarta", "scripts", "lacarta.py")
-	port := freePort(t)
-	py := exec.Command("python3", proto, "serve", "--port", fmt.Sprint(port))
-	py.Env = os.Environ()
-	if err := py.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = py.Process.Kill(); _ = py.Wait() }()
-	pyURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	for i := 0; ; i++ {
-		if resp, err := http.Get(pyURL + "/api/hub"); err == nil {
-			resp.Body.Close()
-			break
-		}
-		if i > 100 {
-			t.Fatal("the prototype's daemon did not start")
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	goSrv := httptest.NewServer(Handler(Config{Token: token, Port: 0}))
-	defer goSrv.Close()
+var (
+	snapTime = regexp.MustCompile(`\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z`)
+	snapHash = regexp.MustCompile(`"[0-9a-f]{64}"`)
+)
 
-	for _, path := range []string{"/api/hub", "/api/p/" + taskID + "/state", "/api/p/" + softID + "/state"} {
-		want, got := getJSON(t, pyURL+path), getJSON(t, goSrv.URL+path)
-		if path == "/api/hub" {
-			dropAuditKind(got)
-		} else {
-			delete(got.(map[string]any), "config") // the project's config.json, which the prototype didn't have
-		}
-		if diffs := compare("", want, got); len(diffs) > 0 {
-			t.Errorf("%s differs from the prototype:\n  %s", path, strings.Join(diffs, "\n  "))
-		}
-	}
+// snapshotNormalize replaces what changes from run to run: times, the scratch home, project ids.
+func snapshotNormalize(s, home, taskID, softID string) string {
+	s = strings.ReplaceAll(s, home, "<HOME>")
+	s = strings.ReplaceAll(s, taskID, "<TASK>")
+	s = strings.ReplaceAll(s, softID, "<SOFT>")
+	s = snapTime.ReplaceAllString(s, "<TS>")
+	return snapHash.ReplaceAllString(s, `"<HASH>"`)
 }
 
 // compare lists the paths where two decoded JSON values differ.

@@ -229,8 +229,10 @@ Reviewer `finding add --severity high` → finding open + triage question (effec
 - Decision: while at least one page is subscribed, the daemon compares the modification times and sizes of `hub.json`, `config.json` and each project's `state.json` and `config.json` every 500 ms and emits `project` (with its id) and `hub` events; the page re-fetches. It polls every 15 s while the stream is healthy, every 2.5 s otherwise. Standard library only (`internal/server/events.go`).
 - Alternatives considered: fsnotify (a dependency, platform quirks), WebSockets (bidirectional is not needed).
 
-### AD-6: Kinds of project behind an interface (phase 5)
-- Decision: extract `Kind{ID, Label, Roles, Commands, Refresh, NextAction, Derived}` when the second real kind (security audit) exists; until then functions branch on `template`, mirroring the prototype so parity could be checked line by line.
+### AD-6: Kinds of project behind an interface (done 2026-11-19)
+- Decision: each kind is a catalog entry (`core.Kinds`: id, label, about, roles) and a `core.Behaviour` (`internal/core/kinds.go`): `Refresh` (stage transitions after each write), `Next` (the `Next:` line once the cases common to every kind are handled) and `Derive` (its fields in what the console receives). The layers above register their own per-kind parts beside it: the session brief (`kindBriefs` in `internal/hooks`), the console payload (`kindPayloads` in `internal/server`), `status` (`kindStatus` in `internal/cli`), the commands (each kind's `*Commands()` and its state check) and the console views (`views` in `web/app/src/views/Project.svelte`). Common to every kind: agents, questions, decisions, activity, the inbox, the chat and remote control.
+- Adding a kind: a catalog entry, a `Behaviour`, a session brief, then whatever payload, status, commands and views it needs. `TestEveryKindHasItsBehaviour` and `TestEveryKindHasItsBrief` catch a kind left half-registered.
+- Remaining branches on `template` are features of one kind used elsewhere (the hub's per-kind lookups, config keys a kind refuses, the single-agent task's session bookkeeping), not dispatch.
 
 ## 8. Repository layout
 

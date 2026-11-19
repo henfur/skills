@@ -277,6 +277,50 @@ func auditData(pid string, st *core.State) *auditPayload {
 	return out
 }
 
+// kindPayloads add what a kind's console views read beyond the state and the derived fields.
+var kindPayloads = map[string]func(pid string, s *core.Store, st *core.State, out *projectPayload) error{
+	core.Software: softwareData,
+	core.Audit: func(pid string, _ *core.Store, st *core.State, out *projectPayload) error {
+		out.Audit = auditData(pid, st)
+		return nil
+	},
+	core.Desk: func(pid string, _ *core.Store, st *core.State, out *projectPayload) error {
+		if st.Desk != nil {
+			out.Desk = deskData(pid, st)
+		}
+		return nil
+	},
+	core.Incident: func(_ string, _ *core.Store, st *core.State, out *projectPayload) error {
+		if st.Incident != nil {
+			out.Case = caseData(st)
+		}
+		return nil
+	},
+}
+
+// softwareData: the specs' text, and the review reports kept inside the project's state folder.
+func softwareData(_ string, s *core.Store, st *core.State, out *projectPayload) error {
+	specs, reports := map[string]string{}, map[string]string{}
+	out.Specs, out.Reports = &specs, &reports
+	for _, k := range core.Specs {
+		b, err := os.ReadFile(core.SpecPath(s, k.K))
+		if err != nil {
+			return err
+		}
+		specs[k.K] = string(b)
+	}
+	dir, _ := filepath.Abs(s.Dir)
+	for _, r := range st.Reviews {
+		p, _ := filepath.Abs(filepath.Join(s.Root, r.Report))
+		if rel, err := filepath.Rel(dir, p); err == nil && !strings.HasPrefix(rel, "..") {
+			if b, err := os.ReadFile(p); err == nil {
+				reports[r.ID] = string(b)
+			}
+		}
+	}
+	return nil
+}
+
 func payload(pid string) (*projectPayload, error) {
 	s, err := core.ProjectStore(pid)
 	if err != nil {
@@ -291,34 +335,10 @@ func payload(pid string) (*projectPayload, error) {
 		return nil, err
 	}
 	out := &projectPayload{ID: pid, State: st, Derived: d}
-	if st.Template == core.Software {
-		specs, reports := map[string]string{}, map[string]string{}
-		out.Specs, out.Reports = &specs, &reports
-		for _, k := range core.Specs {
-			b, err := os.ReadFile(core.SpecPath(s, k.K))
-			if err != nil {
-				return nil, err
-			}
-			specs[k.K] = string(b)
+	if add, ok := kindPayloads[st.Template]; ok {
+		if err := add(pid, s, st, out); err != nil {
+			return nil, err
 		}
-		dir, _ := filepath.Abs(s.Dir)
-		for _, r := range st.Reviews {
-			p, _ := filepath.Abs(filepath.Join(s.Root, r.Report))
-			if rel, err := filepath.Rel(dir, p); err == nil && !strings.HasPrefix(rel, "..") {
-				if b, err := os.ReadFile(p); err == nil {
-					reports[r.ID] = string(b)
-				}
-			}
-		}
-	}
-	if st.Template == core.Audit {
-		out.Audit = auditData(pid, st)
-	}
-	if st.Template == core.Desk && st.Desk != nil {
-		out.Desk = deskData(pid, st)
-	}
-	if st.Template == core.Incident && st.Incident != nil {
-		out.Case = caseData(st)
 	}
 	if pc := core.ProjectConfigRead(st); pc.Exists {
 		out.Config = pc

@@ -295,10 +295,6 @@ func Install(settings string, uninstall bool, w io.Writer) error {
 	}
 	fmt.Fprintf(w, "Installed the lacarta hooks in %s (backup: %s.bak). Sessions in lacarta projects and tracked folders join "+
 		"the console; any other session joins when asked (`lacarta track`). Restart running sessions to include them.\n", settings, name)
-	if _, err := os.Stat(filepath.Join(filepath.Dir(settings), "skills", "lacarta")); err != nil {
-		fmt.Fprintf(w, "The skill itself is not in %s: link the lacarta skill folder there so sessions can load it.\n",
-			filepath.Join(filepath.Dir(settings), "skills"))
-	}
 	return nil
 }
 

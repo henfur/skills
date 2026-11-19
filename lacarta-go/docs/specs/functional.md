@@ -1,6 +1,6 @@
 # lacarta: functional specification
 
-Status: describes the system as built in `lacarta-go/` (phases 1 and 2 of [the port](../../../docs/go-port-plan.md)) plus what phases 3 to 5 must add. Each requirement says whether it is **done** (with the test that proves it) or **to do**. Where this spec and the code disagree on a done requirement, the golden recordings in `testdata/golden/` decide: they were recorded from the Python prototype, which was the reference.
+Status: describes the system as built in `lacarta-go/`. Each requirement says whether it is **done** (with the test that proves it) or **to do**. Where this spec and the code disagree on a done requirement, the golden recordings in `testdata/golden/` decide: the first ones were recorded from the Python prototype, which was the reference until it was removed.
 
 ## 1. Purpose
 

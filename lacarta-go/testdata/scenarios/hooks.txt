@@ -12,11 +12,12 @@ $ agent list
 $ hook post-tool <<< {"session_id":"s-1","tool_name":"Bash"}
 $ agent list
 $ hook post-tool <<< {"session_id":"s-1"}
-> python3 -c "import sys,json;sys.argv=['x'];sys.path.insert(0,'$(dirname "$PYLACARTA")');import lacarta as l;from pathlib import Path;st=l.project_store('$LACARTA_PROJECT');exec('with st.edit() as s: l.add_message(s, \"Also check the logout path\"); l.add_message(s, \"And the tests\")')"
+@message Also check the logout path
+@message And the tests
 $ status
 $ hook post-tool <<< {"session_id":"s-1"}
 $ hook post-tool <<< {"session_id":"s-1"}
-> python3 -c "import sys;sys.path.insert(0,'$(dirname "$PYLACARTA")');import lacarta as l;st=l.project_store('$LACARTA_PROJECT');exec('with st.edit() as s: l.add_message(s, \"One more thing\")')"
+@message One more thing
 $ hook stop <<< {"session_id":"s-1"}
 $ hook stop <<< {"session_id":"s-1"}
 $ agent list

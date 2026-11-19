@@ -18,9 +18,9 @@ You orchestrate; an implementation subagent builds. After `phase start N`, run `
 ```text
 You are implementing phase {N} of a project developed with the lacarta framework.
 Your name is {NAME}. Repository: {ROOT}.
-Lacarta CLI: python3 {L} (read-only for you: only `status` and `decisions`).
+Lacarta CLI: {L} (read-only for you: only `status` and `decisions`).
 
-1. Read all four specs in .lacarta/specs/ and `python3 {L} status` for phase {N}'s goal, scope and
+1. Read all four specs in .lacarta/specs/ and `{L} status` for phase {N}'s goal, scope and
    the requirement IDs it covers.
 2. Build exactly that scope, following the architecture and stack specs, with the tests the
    architecture's testing strategy calls for. Run the tests and the linters until they pass.
@@ -49,9 +49,9 @@ Run both reviews when the scope is done. The procedure, checklists and report fo
 Record each review and each finding:
 
 ```bash
-python3 $L review add --phase 2 --type security --verdict fail --report /tmp/review.md \
+lacarta review add --phase 2 --type security --verdict fail --report /tmp/review.md \
   --summary "Two issues in the upload endpoint" --reviewer subagent
-python3 $L finding add --phase 2 --review security --severity high \
+lacarta finding add --phase 2 --review security --severity high \
   --title "Upload path traversal" --detail "..." --location "app/upload.py:42" \
   --scenario "A filename of ../../app/config.py overwrites the app's config" \
   --recommendation "Generate stored names server-side; reject path separators"

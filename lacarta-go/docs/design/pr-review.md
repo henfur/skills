@@ -2,7 +2,7 @@
 
 Status: **first version implemented** (2026-11-17). See "Implementation status" below for what was built, how it
 differs from this design, and what is left. Third project kind after `software` and `audit`; the one that makes the
-`Kind` interface worth extracting (see [go-port-plan.md](../../../docs/go-port-plan.md#kinds) and
+`Kind` interface worth extracting (now `internal/core/kinds.go`, architecture spec AD-6; see also
 [security-audit.md §7](security-audit.md#7-using-the-kind-interface)). Decisions taken are in §12, open items in §13.
 
 The audit design's principles carry over unchanged: lacarta orchestrates and records, skills and instructions hold the
